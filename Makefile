@@ -15,4 +15,4 @@ example.c: eg_conf.cfg
 
 
 clean:
-	rm -f *.o example.[ch] confcheck
+	rm -f *.o example.[ch] confcheck example

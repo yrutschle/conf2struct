@@ -2,21 +2,28 @@
 
 # conf2struct: generate libconf parsers that read to structs
 # Copyright (C) 2018  Yves Rutschle
-# 
-# This program is free software; you can redistribute it
-# and/or modify it under the terms of the GNU General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later
-# version.
-# 
-# This program is distributed in the hope that it will be
-# useful, but WITHOUT ANY WARRANTY; without even the implied
-# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-# PURPOSE.  See the GNU General Public License for more
-# details.
-# 
-# The full text for the General Public License is here:
-# http://www.gnu.org/licenses/gpl.html
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 
 use strict;
 
@@ -90,7 +97,7 @@ sub scalar_type_print {
     {
         'boolean' => '%d',
         'int' => '%d',
-        'int64' => "%d",
+        'int64' => "%ld",
         'float' => "%f",
         'string' => '%s',
     }->{$in};
@@ -99,7 +106,9 @@ sub scalar_type_print {
 ################################################################################
 # Turn libconfig setting names to C struct names
 sub cfgname2c {
-    s/-/_/g;
+    my ($name) = @_;
+    $name =~ s/-/_/g;
+    return $name;
 }
 
 ################################################################################
@@ -112,27 +121,31 @@ sub cfgname2c {
 sub make_decl_list {
     my ($prefix, $setting) = @_;
 
-    my $name = $setting->{name};
     my ($structs, $decls) = ("", "");
     foreach my $setting (@{$setting->{items}}) {
+        my $name = cfgname2c $setting->{name};
         if ($setting->{type} eq 'list') {
-            my $sname = "${prefix}_$setting->{name}_item";
-            $structs .= make_struct_header("${prefix}_$setting->{name}", $setting);
-            $decls = "$decls\tsize_t\t$setting->{name}_len;\n\tstruct $sname* $setting->{name};\n";
+            my $sname = "${prefix}_${name}_item";
+            $structs .= make_struct_header("${prefix}_${name}", $setting);
+            $decls = "$decls\tsize_t\t${name}_len;\n\tstruct $sname* ${name};\n";
+        } elsif ($setting->{type} eq 'group') {
+            my $sname = "${prefix}_${name}_item";
+            $structs .= make_struct_header("${prefix}_${name}", $setting);
+            $decls = "$decls\tstruct $sname* ${name};\n";
         } elsif ($setting->{type} eq 'array') {
             my $type = scalar_type($setting->{element_type});
-            $decls= "$decls\tsize_t\t$setting->{name}_len;\n\t$type* $setting->{name};\n";
+            $decls= "$decls\tsize_t\t${name}_len;\n\t$type* ${name};\n";
         } elsif ($setting->{type} eq 'runtime') {
-            $decls .= "\t$setting->{c_type}\t$setting->{name};\n";
+            $decls .= "\t$setting->{c_type}\t${name};\n";
         } else {
             my $c_type = scalar_type $setting->{type};
             if ($setting->{optional} and $setting->{type} eq 'string') {
-                $decls.= "\tint\t$setting->{name}_is_present;\n";
+                $decls.= "\tint\t${name}_is_present;\n";
             }
             if ($setting->{var} and $setting->{type} eq 'string') {
                 $c_type = "char*";
             }
-            $decls.= "\t$c_type\t$setting->{name};\n";
+            $decls.= "\t$c_type\t${name};\n";
         }
     }
     return ($structs, $decls);
@@ -155,7 +168,7 @@ sub make_struct_header {
 sub make_root_header {
     my ($root) = @_;
     my $setting = $root->{config};
-    my $name = $setting->{name};
+    my $name = cfgname2c $setting->{name};
     my $NAME = uc $name;
     my $out = <<EOF;
 $banner 
@@ -210,23 +223,23 @@ static int ${name}_parser(
 EOF
 
     foreach my $setting (@settings) {
+        my $sname = cfgname2c $setting->{name};
         if ($setting->{type} eq 'list') {
-            my $hname = "${name}_$setting->{name}";
-            my $dname = "${hname}_item";
+            my $hname = "${name}_${sname}";
             my $pname = "${hname}_parser";
             my $c = make_parser($hname, $setting);
             $out = <<EOF;
 $c
 $out
-        $name->$setting->{name} = NULL;
-        $name->$setting->{name}_len = 0;
-        if ((setting = config_setting_lookup(cfg, \"$setting->{name}\"))) {
+        $name->${sname} = NULL;
+        $name->${sname}_len = 0;
+        if ((setting = config_setting_lookup(cfg, \"${sname}\"))) {
             int len = config_setting_length(setting);
-            $name->$setting->{name} = malloc(len * sizeof(*$name->$setting->{name}));
-            $name->$setting->{name}_len = len;
+            $name->${sname} = malloc(len * sizeof(*$name->${sname}));
+            $name->${sname}_len = len;
             for (int i = 0; i < len; i++) {
                 config_setting_t* s = config_setting_get_elem(setting, i);
-                int res = $pname(s, &$name->$setting->{name}\[i\], errmsg);
+                int res = $pname(s, &$name->${sname}\[i\], errmsg);
                 if (!res) return 0;
             }
         }
@@ -234,18 +247,34 @@ EOF
         } elsif ($setting->{type} eq 'array') {
             my $getname = scalar_type_get $setting->{element_type};
             $out .= <<EOF
-        $name->$setting->{name} = NULL;
-        $name->$setting->{name}_len = 0;
-        if ((setting = config_setting_lookup(cfg, "$setting->{name}"))) {
+        $name->${sname} = NULL;
+        $name->${sname}_len = 0;
+        if ((setting = config_setting_lookup(cfg, "${sname}"))) {
             int len = config_setting_length(setting);
-            $name->$setting->{name} = malloc(len * sizeof(*$name->$setting->{name}));
-            $name->$setting->{name}_len = len;
+            $name->${sname} = malloc(len * sizeof(*$name->${sname}));
+            $name->${sname}_len = len;
             for (int i = 0; i < len; i++) {
                 config_setting_t* s = config_setting_get_elem(setting, i);
-                $name->$setting->{name}\[i\] = $getname(s);
+                $name->${sname}\[i\] = $getname(s);
             }
         }
 EOF
+        } elsif ($setting->{type} eq 'group') {
+            my $hname = "${name}_${sname}";
+            my $pname = "${hname}_parser";
+            my $c = make_parser($hname, $setting);
+            $out = <<EOF
+$c
+$out
+        $name->${sname} = NULL;
+        if ((setting = config_setting_lookup(cfg, \"${sname}\"))) {
+            $name->${sname} = malloc(sizeof(*$name->${sname}));
+            int res = $pname(setting, $name->${sname}, errmsg);
+            if (!res) return 0;
+        }
+                    
+EOF
+
         } elsif ($setting->{type} eq 'runtime') {
             # Leave it alone
         } else {
@@ -261,26 +290,26 @@ EOF
                 }
                 my $set_present = "";
                 if ($setting->{optional}) {
-                    $set_present = "else {\n\t\t$name->$setting->{name}_is_present = 1;\n\t}\n";
+                    $set_present = "else {\n\t\t$name->${sname}_is_present = 1;\n\t}\n";
                 }
                 $out .= <<EOF;
-        $name->$setting->{name} = $setting->{default};
-        if (config_setting_lookup(cfg, \"$setting->{name}\")) {
-            if ($c_parse(cfg, \"$setting->{name}\", &$name->$setting->{name}) == CONFIG_FALSE) {
-                *errmsg = "Parsing of option \\\"$setting->{name}\\\" failed";
+        $name->${sname} = $setting->{default};
+        if (config_setting_lookup(cfg, \"${sname}\")) {
+            if ($c_parse(cfg, \"${sname}\", &$name->${sname}) == CONFIG_FALSE) {
+                *errmsg = "Parsing of option \\\"${sname}\\\" failed";
                 return 0;
             } $set_present;
         }
 EOF
             } else {
                 $out .= <<EOF;
-        if (config_setting_lookup(cfg, \"$setting->{name}\")) {
-            if ($c_parse(cfg, \"$setting->{name}\", &$name->$setting->{name}) == CONFIG_FALSE) {
-                *errmsg = "Parsing of option \\\"$setting->{name}\\\" failed";
+        if (config_setting_lookup(cfg, \"${sname}\")) {
+            if ($c_parse(cfg, \"${sname}\", &$name->${sname}) == CONFIG_FALSE) {
+                *errmsg = "Parsing of option \\\"${sname}\\\" failed";
                 return 0;
             }
         } else {
-            *errmsg = "Mandatory option \\\"$setting->{name}\\\" is missing";
+            *errmsg = "Mandatory option \\\"$name.${sname}\\\" is missing";
             return 0;
         }
 EOF
@@ -288,11 +317,11 @@ EOF
             if ($setting->{type} eq 'string' and
                 $setting->{var}) {
                 $out .= <<EOF;
-        if (asprintf(&tmp, "%s", $name->$setting->{name}) == -1) {
+        if (asprintf(&tmp, "%s", $name->${sname}) == -1) {
             *errmsg = "asprintf: cannot allocate memory";
             return 0;
         }
-        $name->$setting->{name} = tmp;
+        $name->${sname} = tmp;
 EOF
             }
         }
@@ -306,7 +335,7 @@ EOF
 sub make_root_parser {
     my ($root) = @_;
     my $setting = $root->{config};
-    my $name = $setting->{name};
+    my $name = cfgname2c $setting->{name};
 
 my $out = <<EOF;
 $banner
@@ -364,28 +393,40 @@ static void ${name}_print(
 EOF
 
     foreach my $setting (@settings) {
+        my $sname = cfgname2c $setting->{name};
         if ($setting->{type} eq 'list') {
-            my $hname = "${name}_$setting->{name}";
-            my $dname = "${hname}_item";
+            my $hname = "${name}_${sname}";
             my $pname = "${hname}_print";
             my $c = make_print_settings($hname, $setting);
             $out = <<EOF
 $c
 $out
         indent(depth);
-        printf("$setting->{name} [%d]:\\n", $name->$setting->{name}_len);
-        for (int i = 0; i < $name->$setting->{name}_len; i++) {
-            $pname(&$name->$setting->{name}\[i\], depth+1);
+        printf("${sname} [%d]:\\n", $name->${sname}_len);
+        for (int i = 0; i < $name->${sname}_len; i++) {
+            $pname(&$name->${sname}\[i\], depth+1);
         }
 EOF
+        } elsif ($setting->{type} eq 'group') {
+            my $hname = "${name}_${sname}";
+            my $pname = "${hname}_print";
+            my $c = make_print_settings($hname, $setting);
+            $out = <<EOF
+$c
+$out
+        indent(depth);
+        printf("${sname}:\\n");
+        $pname($name->${sname}, depth+1);
+EOF
+
         } elsif ($setting->{type} eq 'array') {
             my $fmt = scalar_type_print $setting->{element_type};
             $out .= <<EOF
         indent(depth);
-        printf("$setting->{name} [%d]:\\n", $name->$setting->{name}_len);
-        for (i = 0; i < $name->$setting->{name}_len; i++) {
+        printf("${sname} [%d]:\\n", $name->${sname}_len);
+        for (i = 0; i < $name->${sname}_len; i++) {
             indent(depth+1);
-            printf("%d:\\t$fmt\\n", i, $name->$setting->{name}\[i\]);
+            printf("%d:\\t$fmt\\n", i, $name->${sname}\[i\]);
         }
 EOF
         } elsif ($setting->{type} eq 'runtime') {
@@ -394,12 +435,12 @@ EOF
             my $fmt = scalar_type_print $setting->{type};
             $out .= <<EOF
         indent(depth);
-        printf("$setting->{name}: $fmt\\n", $name->$setting->{name});
+        printf("${sname}: $fmt\\n", $name->${sname});
 EOF
         }
     }
 
-    $out .= "   printf(\"\\n\");\n}\n";
+    $out .= "}\n";
 
     return $out;
 }
@@ -409,7 +450,7 @@ EOF
 sub make_root_print_settings {
     my ($root) = @_;
     my $setting = $root->{config};
-    my $name = $setting->{name};
+    my $name = cfgname2c $setting->{name};
 
     my $out = <<EOF;
 
