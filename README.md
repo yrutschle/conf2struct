@@ -9,6 +9,12 @@ DESCRIPTION
 `conf2struct` takes a configuration file that describes a
 configuration file in the [libconfig](https://hyperrealm.github.io/libconfig/) format, and generates a C parser that will read a configuration file directly into a C structure. The goal is to accept any file that is valid for `libconfig`, which in particular means using `conf2struct` does not introduce restrictions to what the configuration file should look like.
 
+It also generates a command line interpreter based on
+[argtable3](https://www.argtable.org/). Currently it allows
+to create a configuration equivalent to that of the
+configuration file; eventually it will allow to override
+file settings from the command line.
+
 `conf2struct` manageѕ optional settings and default values.
 
 (A bit of history:
@@ -130,12 +136,34 @@ Printer API
 `conf2struct` also builds a pretty-printer that takes a
 `struct` as input.
 
+Command line API
+================
+
+For a prefix `foo`, a command line parser will be generated:
+
+```
+int foo_cl_parse(
+        int argc,
+        char* argv[],
+        struct foo_items* config);
+```
+
+The command line parser relies on argtable3, which is
+included in this distribution. argtable3.o needs to be added
+to the final project.
+
+Error handling is performed directly by the parser, using
+standard conventions: printing an error description and
+synopsis in case of failure.
+
+
 Example
 =======
 
 The file `eg_conf.cfg` documents the `conf2struct`
 configuration to build a parser for the libconfig
-`example.cfg`. `parser.c` shows a very simple parser that
+`example.cfg` (which is verbatim from the libconfig Web
+site). `parser.c` shows a very simple parser that
 also reports errors, using this example. A simple:
 
 ```
@@ -146,6 +174,13 @@ make
 will produce the parser in `example.c` and `example.h` (as
 specified in `eg_conf.cfg`), which parses `example.cfg` and
 prints the result directly from the in-memory struct.
+
+The following will print out the setting from the
+configuration file, followed by a (different) configuration
+from the command line:
+```
+ ./example --version 2 --application-window-title=AppStore --application-window-size-w=10 --application-window-size-h=15 --application-window-pos-x=250 --application-window-pos-y=250 --application-misc-columns=blah --application-misc-columns=bleh --application-misc-columns=foo --application-books-title=foo --application-books-title=bar 
+```
 
 confcheck
 =========

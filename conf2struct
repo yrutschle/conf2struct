@@ -196,6 +196,11 @@ void ${name}_print(
     struct ${name}_item *${name},
     int depth);
 
+int ${name}_cl_parse(
+    int argc,
+    char* argv[],
+    struct ${name}_item *${name});
+
 #endif
 EOF
 
@@ -470,9 +475,189 @@ EOF
     return $out;
 }
 
+################################################################################
 
+sub argtype {
+    my ($in) = @_;
+    my $out = {
+        'boolean' => 'arg_lit',
+        'int' => 'arg_int',
+        'int64' => 'arg_int',
+        'float' => 'arg_dbl',
+        'string' => 'arg_str',
+    }->{$in};
+    return $out;
+}
+
+# Type name inside the argtable structure
+sub structtype {
+    my ($in) = @_;
+    my $out = {
+        'boolean' => 'count',
+        'int' => 'ival',
+        'int64' => 'ival',
+        'float' => 'dval',
+        'string' => 'sval',
+    }->{$in};
+    return $out;
+}
 
 ################################################################################
+sub make_argtable_declarations {
+    my ($prefix, $max, $in) = @_;
+
+    my (@def, @init);
+    foreach my $setting (@{$in->{items}}) {
+        next if $setting->{type} =~ /runtime/;
+
+        $setting->{description} //= "";
+        my $arg_type = argtype( $setting->{type} eq 'array'?  
+            $setting->{element_type} : 
+            $setting->{type});
+        my $name = "${prefix}_" . cfgname2c $setting->{name};
+        if ($setting->{type} =~ /group|list/) {
+            my $sname = cfgname2c $setting->{name};
+            my ($r_def, $r_init) = make_argtable_declarations("${prefix}_$sname", 10, $setting);
+            push @def, @{$r_def};
+            push @init, @{$r_init};
+        } else {
+            push @def, "struct $arg_type* $name;\n";
+            my $arg_name = $name;
+            $arg_name =~ s/.*?_//;  # Remove first prefix from cmdline name
+            $arg_name =~ s/_/-/g;
+            $max = 10 if $setting->{type} eq 'array';
+            my $type;
+            $type = ", \"<n>\"" if $arg_type =~ /arg_int|arg_dbl/;
+            $type = ", \"<str>\"" if $arg_type eq 'arg_str';
+            push @init, <<EOF;
+        $name = ${arg_type}n(NULL, "$arg_name"$type, 0, $max, "$setting->{description}"),
+EOF
+        }
+    }
+    return (\@def, \@init);
+}
+################################################################################
+sub make_argtable_copy2struct {
+    my ($prefix, $in) = @_;
+
+    # arg_index is the index in the command line argument
+    # array, for groups and lists. ints also have indexes
+    # anyway, so we use it all the time
+    my $out = <<EOF;
+static void ${prefix}_cl_c2s(int arg_index, struct ${prefix}_item* cfg) {
+    int i, len;
+
+EOF
+    foreach my $setting (@{$in->{items}}) {
+        next if $setting->{type} =~ /runtime/;
+
+        my $name = cfgname2c $setting->{name};
+        my $pname = "${prefix}_$name";
+
+        if ($setting->{type} =~ /list/) {
+            my $ac2s = make_argtable_copy2struct("${prefix}_${name}", $setting);
+            $out = <<EOF;
+$ac2s
+
+$out
+            len = ${pname}_$setting->{items}->[0]->{name}->count;
+            cfg->${name}_len = len;
+            cfg->${name} = malloc(len * sizeof(*cfg->${name}));
+            memset(cfg->$name, 0, len* sizeof(*cfg->$name));
+            for (i = 0; i < len; i++) {
+                ${prefix}_${name}_cl_c2s(i, &cfg->$name [i]);
+            }
+EOF
+        } elsif ($setting->{type} =~ /group/) {
+            my $ac2s = make_argtable_copy2struct("${prefix}_${name}", $setting);
+            $out = <<EOF;
+$ac2s
+
+$out
+            cfg->${name} = malloc(sizeof(*cfg->${name}));
+            memset(cfg->$name, 0, sizeof(*cfg->$name));
+            ${prefix}_${name}_cl_c2s(0, cfg->$name );
+EOF
+        } elsif ($setting->{type} =~ /array/) {
+            my $type = structtype $setting->{element_type};
+            $out .= <<EOF;
+            /* array */
+            len = $pname->count;
+            cfg->${name}_len = len;
+            cfg->$name = malloc(len * sizeof(*cfg->$name));
+            for (i = 0; i < len; i++) {
+                cfg->$name [i] = $pname->$type [i];
+            }
+EOF
+        } else {
+            $out .= "\tif ($pname->count) {\n";
+            $out .= "\t\tcfg->${name}_is_present = 1;\n" if $setting->{optional};
+            if ($setting->{type} =~ /int|int64/) {
+                $out .= "\t\tcfg->$name = $pname->ival [arg_index];\n";
+            } elsif ($setting->{type} eq 'float') {
+                $out .= "\t\tcfg->$name = $pname->dval [arg_index];\n";
+            } elsif ($setting->{type} eq 'boolean') {
+                $out .= "\t\tcfg->$name = $pname->count;\n";
+            } elsif ($setting->{type} eq 'string') {
+                $out .= "\t\tcfg->$name = $pname->sval [arg_index];\n";
+            } else {
+                die "Unknown type $setting->{type}\n";
+            }
+            $out .= "\t}\n";
+        }
+    }
+    $out .= "}\n\n";
+    return $out;
+}
+
+################################################################################
+sub make_argtable {
+    my ($root) = @_;
+
+    my $setting = $root->{config};
+    my $prefix = $setting->{name};
+
+    my $out = <<EOF;
+EOF
+    my ($r_def, $r_init) = make_argtable_declarations($prefix, 1, $setting);
+    my $copy = make_argtable_copy2struct($prefix, $setting);
+
+    $out = <<EOF;
+
+#include "argtable3.h"
+
+@$r_def
+struct arg_end* ${prefix}_end;
+
+
+$copy
+
+int ${prefix}_cl_parse(int argc, char* argv[], struct ${prefix}_item* cfg) {
+        void* argtable[] = {
+@$r_init
+        ${prefix}_end = arg_end(10)
+    };
+
+    int nerrors;
+
+    nerrors = arg_parse(argc, argv, argtable);
+    if (nerrors) {
+        arg_print_errors(stdout, ${prefix}_end, "${prefix}"); 
+        arg_print_syntax(stdout, argtable, "\\n");
+        arg_print_glossary(stdout, argtable, "%s\t%s\\n");
+        return 0;
+    }
+
+    ${prefix}_cl_c2s(0, cfg);
+    return 1;
+}
+EOF
+
+
+    return $out;
+}
+
+
 ################################################################################
 # main
 ################################################################################
@@ -486,4 +671,6 @@ print $c make_root_parser($hr);
 
 # This is mostly for debugging
 print $c make_root_print_settings($hr); #'config', @{$hr->{config}{items}});
+
+print $c make_argtable($hr);
 
