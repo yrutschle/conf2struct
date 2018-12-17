@@ -11,15 +11,6 @@ void main(int argc, char* argv[]) {
     const char* err;
     int res;
 
-    res = eg_parse_file("example.cfg", &config, &err);
-
-    if (!res) {
-        fprintf(stderr, "%s\n", err);
-        exit(1);
-    }
-    printf("from configuration file:\n");
-    eg_print(&config,0);
-
     res = eg_cl_parse(argc, argv, &config_cl);
     if (!res) {
         exit(1);

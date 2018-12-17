@@ -50,6 +50,12 @@ configuration file:
 This contains a `name` entry which will prefix all
 symbols, and a `items` declaration equivalent to that of a
 group (see below).
+- `conffile_option`: Array of two strings describing the
+  short and long command line option that will read a
+configuration file.
+- `includes`: Array of header files that will be included
+  first thing in the generated header file. This allows to
+define types that are used as `runtime` data.
 
 Settings
 --------
@@ -106,10 +112,14 @@ field `<name>_len` is added containing the number of
 elements in the array.
 
 
-Parser API
-==========
+Generated API
+=============
 
-Assuming the prefix for our configuration is `foo`, the prototype for the parser produced is:
+Assuming the prefix for our configuration is `foo`, two
+public functions are generated:
+
+Configuration file API
+----------------------
 
 ```
 int foo_parse_file(
@@ -131,13 +141,23 @@ allocate memory for groups, lists and arrays as required.
 `config_parser()` returns 0 on failure, 1 on success.
 
 Printer API
-===========
+-----------
 
-`conf2struct` also builds a pretty-printer that takes a
-`struct` as input.
+```
+void foo_print(struct foo_item* in, int depth);
+```
+
+`conf2struct` builds a pretty-printer that takes a `struct`
+as input. It recursively descends in groups and array with
+indentation. `depth` is the number of tabs to print first,
+usually 0.
+
+The goal of this function is debugging to check
+`conf2struct`'s idea of what is going on, rather than for
+use for production use.
 
 Command line API
-================
+----------------
 
 For a prefix `foo`, a command line parser will be generated:
 
@@ -157,6 +177,26 @@ standard conventions: printing an error description and
 synopsis in case of failure.
 
 
+Command line option names is derived from the levels
+specified in the configuration file: the libconfig path to
+setting `application.window.pos.x` is specified as
+`--applicatio-window-pos-x` command line option. Arrays and
+lists can be filled by specifying the option several times.
+
+
+This function specifically manages an option to read a
+configuration file: if specified on the command line, the
+configuration file will be read first, then the rest of the
+command line options are evaluated to override configuration
+file settings. The option name is specified as
+`conffile_option` in the configuration root (see above). The
+overriding strategy for groups, arrays and lists is to
+remove all the settings from the command line as soon as one
+command line option appears (this is just one of several
+choices, including adding to the lists. It's not clear at
+this stage if a single strategy is the way to go.)
+
+
 Example
 =======
 
@@ -168,7 +208,7 @@ also reports errors, using this example. A simple:
 
 ```
 make
-./example
+./example -F example.cfg
 ```
 
 will produce the parser in `example.c` and `example.h` (as
@@ -176,10 +216,10 @@ specified in `eg_conf.cfg`), which parses `example.cfg` and
 prints the result directly from the in-memory struct.
 
 The following will print out the setting from the
-configuration file, followed by a (different) configuration
+configuration file, with some overrides 
 from the command line:
 ```
- ./example --version 2 --application-window-title=AppStore --application-window-size-w=10 --application-window-size-h=15 --application-window-pos-x=250 --application-window-pos-y=250 --application-misc-columns=blah --application-misc-columns=bleh --application-misc-columns=foo --application-books-title=foo --application-books-title=bar 
+ ./example -F example.cfg --version 2 --application-window-title=AppStore --application-window-size-w=10 --application-window-size-h=15 --application-window-pos-x=250 --application-window-pos-y=250 --application-misc-columns=blah --application-misc-columns=bleh --application-misc-columns=foo --application-books-title=foo --application-books-title=bar 
 ```
 
 confcheck
@@ -200,8 +240,11 @@ TODO
 lists, and strings, which can be verified to check the validity
 of the configuration.
 
-- generator of a command-line parser to override the
-configuration file.
+- Maybe, several strategies for command line override of
+  arrays and lists
+
+- A better syntax for arrays, e.g. "--opt-int 2,3,5,7"
+
 
 Similar project
 ===============

@@ -560,13 +560,16 @@ EOF
 $ac2s
 
 $out
-            len = ${pname}_$setting->{items}->[0]->{name}->count;
+        len = ${pname}_$setting->{items}->[0]->{name}->count;
+        if (len) {
+            if (cfg->${name}_len) free(cfg->${name}); /* override conffile? */
             cfg->${name}_len = len;
             cfg->${name} = malloc(len * sizeof(*cfg->${name}));
             memset(cfg->$name, 0, len* sizeof(*cfg->$name));
             for (i = 0; i < len; i++) {
                 ${prefix}_${name}_cl_c2s(i, &cfg->$name [i]);
             }
+        }
 EOF
         } elsif ($setting->{type} =~ /group/) {
             my $ac2s = make_argtable_copy2struct("${prefix}_${name}", $setting);
@@ -574,19 +577,24 @@ EOF
 $ac2s
 
 $out
+        if (!cfg->${name}) {
             cfg->${name} = malloc(sizeof(*cfg->${name}));
             memset(cfg->$name, 0, sizeof(*cfg->$name));
-            ${prefix}_${name}_cl_c2s(0, cfg->$name );
+        }
+        ${prefix}_${name}_cl_c2s(0, cfg->$name );
 EOF
         } elsif ($setting->{type} =~ /array/) {
             my $type = structtype $setting->{element_type};
             $out .= <<EOF;
             /* array */
             len = $pname->count;
-            cfg->${name}_len = len;
-            cfg->$name = malloc(len * sizeof(*cfg->$name));
-            for (i = 0; i < len; i++) {
-                cfg->$name [i] = $pname->$type [i];
+            if (len) {
+                if (cfg->${name}_len) free(cfg->${name}); /* override conffile? */
+                cfg->${name}_len = len;
+                cfg->$name = malloc(len * sizeof(*cfg->$name));
+                for (i = 0; i < len; i++) {
+                    cfg->$name [i] = $pname->$type [i];
+                }
             }
 EOF
         } else {
@@ -617,12 +625,17 @@ sub make_argtable {
     my $setting = $root->{config};
     my $prefix = $setting->{name};
 
-    my $out = <<EOF;
-EOF
     my ($r_def, $r_init) = make_argtable_declarations($prefix, 1, $setting);
     my $copy = make_argtable_copy2struct($prefix, $setting);
 
-    $out = <<EOF;
+    # Add configuration file settings
+    my ($short_opt, $long_opt) = @{$root->{conffile_option}};
+    unshift @$r_def, "struct arg_file* ${prefix}_conffile;\n";
+    unshift @$r_init, <<EOF;
+        ${prefix}_conffile = arg_filen("$short_opt", "$long_opt", "<file>", 0, 1, ""),
+EOF
+
+    my $out = <<EOF;
 
 #include "argtable3.h"
 
@@ -637,7 +650,7 @@ int ${prefix}_cl_parse(int argc, char* argv[], struct ${prefix}_item* cfg) {
 @$r_init
         ${prefix}_end = arg_end(10)
     };
-
+    const char* errmsg;
     int nerrors;
 
     nerrors = arg_parse(argc, argv, argtable);
@@ -646,6 +659,13 @@ int ${prefix}_cl_parse(int argc, char* argv[], struct ${prefix}_item* cfg) {
         arg_print_syntax(stdout, argtable, "\\n");
         arg_print_glossary(stdout, argtable, "%s\t%s\\n");
         return 0;
+    }
+
+    if (${prefix}_conffile->count) {
+        if (!${prefix}_parse_file(${prefix}_conffile->filename[0], cfg, &errmsg)) {
+            fprintf(stderr, "%s\\n", errmsg);
+            exit(1);
+        }
     }
 
     ${prefix}_cl_c2s(0, cfg);
@@ -669,8 +689,7 @@ print $h make_root_header($hr);
 open my $c, "> $parser" or die "$parser: $!\n";
 print $c make_root_parser($hr);
 
-# This is mostly for debugging
-print $c make_root_print_settings($hr); #'config', @{$hr->{config}{items}});
+print $c make_root_print_settings($hr);
 
 print $c make_argtable($hr);
 
