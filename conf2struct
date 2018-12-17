@@ -526,7 +526,7 @@ sub make_argtable_declarations {
             $arg_name =~ s/.*?_//;  # Remove first prefix from cmdline name
             $arg_name =~ s/_/-/g;
             $max = 10 if $setting->{type} eq 'array';
-            my $type;
+            my $type = "";
             $type = ", \"<n>\"" if $arg_type =~ /arg_int|arg_dbl/;
             $type = ", \"<str>\"" if $arg_type eq 'arg_str';
             push @init, <<EOF;
@@ -629,6 +629,7 @@ sub make_argtable {
     my $copy = make_argtable_copy2struct($prefix, $setting);
 
     # Add configuration file settings
+    die "conffile_option not set\n" unless defined $root->{conffile_option};
     my ($short_opt, $long_opt) = @{$root->{conffile_option}};
     unshift @$r_def, "struct arg_file* ${prefix}_conffile;\n";
     unshift @$r_init, <<EOF;
