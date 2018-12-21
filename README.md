@@ -82,6 +82,8 @@ then it is mandatory.
   Undefined strings will point to NULL, and optional
 settings receive an additional `<id>_is_present` boolean in the
 final struct.
+- `var` is a boolean to set if the variable can be modified
+during runtime (i.e. it won't be declared `const`).
 
 Groups
 ------
