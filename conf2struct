@@ -559,6 +559,8 @@ sub make_argtable_declarations {
             $setting->{type});
         my $name = "${prefix}_" . cfgname2c $setting->{name};
         if ($setting->{type} =~ /group|list/) {
+            print "$setting->{name}: $setting->{no_cl_accessors}\n";
+            next if exists $setting->{no_cl_accessors};
             my $sname = cfgname2c $setting->{name};
             my ($r_def, $r_init) = make_argtable_declarations("${prefix}_$sname", 10, $setting);
             push @def, @{$r_def};
@@ -572,6 +574,8 @@ sub make_argtable_declarations {
             my $type = "";
             $type = ", \"<n>\"" if $arg_type =~ /arg_int|arg_dbl/;
             $type = ", \"<str>\"" if $arg_type eq 'arg_str';
+            my $short = "NULL";
+            $short = "\"$setting->{short}\"" if exists $setting->{short};
             push @init, <<EOF;
         $name = ${arg_type}n($short, "$arg_name"$type, 0, $max, "$setting->{description}"),
 EOF
@@ -587,8 +591,10 @@ sub make_argtable_cl_groups_decls {
 
     my (@def, @init);
     foreach my $g (@groups) {
+        my $short = "NULL";
+        $short = "\"$g->{short}\"" if exists $g->{short};
         push @def, "\tstruct arg_str* ${prefix}_$g->{name};\n";
-        push @init, "\t${prefix}_$g->{name} = arg_strn(NULL, \"$g->{name}\", \"<str>\", 0, 10, \"$g->{description}\"),\n";
+        push @init, "\t${prefix}_$g->{name} = arg_strn($short, \"$g->{name}\", \"<str>\", 0, 10, \"$g->{description}\"),\n";
     }
     return (\@def, \@init);
 }
@@ -688,6 +694,7 @@ static void ${prefix}_cl_c2s(int arg_index, struct ${prefix}_item* cfg) {
 EOF
     foreach my $setting (@{$in->{items}}) {
         next if $setting->{type} =~ /runtime/;
+        next if $setting->{no_cl_accessors};
 
         my $name = cfgname2c $setting->{name};
         my $pname = "${prefix}_$name";
