@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 # conf2struct: generate libconf parsers that read to structs
-# Copyright (C) 2018  Yves Rutschle
+# Copyright (C) 2018-2019  Yves Rutschle
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -571,9 +571,11 @@ sub make_argtable_declarations {
             $arg_name =~ s/.*?_//;  # Remove first prefix from cmdline name
             $arg_name =~ s/_/-/g;
             $max = 10 if $setting->{type} eq 'array';
-            my $type = "";
+            my $type = ", NULL";
+            $type = "" if $arg_type eq 'arg_lit';
             $type = ", \"<n>\"" if $arg_type =~ /arg_int|arg_dbl/;
             $type = ", \"<str>\"" if $arg_type eq 'arg_str';
+            $type = ", \"$setting->{argdesc}\"" if exists $setting->{argdesc};
             my $short = "NULL";
             $short = "\"$setting->{short}\"" if exists $setting->{short};
             push @init, <<EOF;
@@ -591,10 +593,12 @@ sub make_argtable_cl_groups_decls {
 
     my (@def, @init);
     foreach my $g (@groups) {
+        my $type = "NULL";
+        $type = "\"$g->{argdesc}\"" if exists $g->{argdesc};
         my $short = "NULL";
         $short = "\"$g->{short}\"" if exists $g->{short};
         push @def, "\tstruct arg_str* ${prefix}_$g->{name};\n";
-        push @init, "\t${prefix}_$g->{name} = arg_strn($short, \"$g->{name}\", \"<str>\", 0, 10, \"$g->{description}\"),\n";
+        push @init, "\t${prefix}_$g->{name} = arg_strn($short, \"$g->{name}\", $type, 0, 10, \"$g->{description}\"),\n";
     }
     return (\@def, \@init);
 }
@@ -785,7 +789,7 @@ sub make_argtable {
     my ($short_opt, $long_opt) = @{$root->{conffile_option}};
     unshift @$r_def, "struct arg_file* ${prefix}_conffile;\n";
     unshift @$r_init, <<EOF;
-        ${prefix}_conffile = arg_filen("$short_opt", "$long_opt", "<file>", 0, 1, ""),
+        ${prefix}_conffile = arg_filen("$short_opt", "$long_opt", "<file>", 0, 1, "Specify configuration file"),
 EOF
 
     my $out = <<EOF;
@@ -811,7 +815,7 @@ int ${prefix}_cl_parse(int argc, char* argv[], struct ${prefix}_item* cfg) {
     if (nerrors) {
         arg_print_errors(stdout, ${prefix}_end, "${prefix}"); 
         arg_print_syntax(stdout, argtable, "\\n");
-        arg_print_glossary(stdout, argtable, "%s\t%s\\n");
+        arg_print_glossary(stdout, argtable, "  %-25s\t%s\\n");
         return 0;
     }
 
