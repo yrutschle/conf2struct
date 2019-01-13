@@ -16,6 +16,8 @@ configuration file; eventually it will allow to override
 file settings from the command line.
 
 `conf2struct` manageѕ optional settings and default values.
+It is alpha and the configuration file format is bound to
+change dramatically.
 
 (A bit of history:
 [sslh](http://www.rutschle.net/tech/sslh/README.html) uses
