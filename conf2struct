@@ -212,6 +212,8 @@ EOF
 sub default_value {
     my ($s) = @_;
 
+    return undef unless defined $s->{default};
+
     if ($s->{type} eq "string") {
         if ($s->{optional}) {
             return "NULL";
@@ -247,7 +249,7 @@ EOF
             # no defaults for arrays yet
         } else {
             my $default = default_value $setting;
-            $out .= "\tcfg->$name = $default;\n";
+            $out .= "\tcfg->$name = $default;\n" if defined $default;
         }
     }
     $out .= "}\n\n";
@@ -559,7 +561,6 @@ sub make_argtable_declarations {
             $setting->{type});
         my $name = "${prefix}_" . cfgname2c $setting->{name};
         if ($setting->{type} =~ /group|list/) {
-            print "$setting->{name}: $setting->{no_cl_accessors}\n";
             next if exists $setting->{no_cl_accessors};
             my $sname = cfgname2c $setting->{name};
             my ($r_def, $r_init) = make_argtable_declarations("${prefix}_$sname", 10, $setting);
@@ -597,35 +598,79 @@ sub make_argtable_cl_groups_decls {
         $type = "\"$g->{argdesc}\"" if exists $g->{argdesc};
         my $short = "NULL";
         $short = "\"$g->{short}\"" if exists $g->{short};
-        push @def, "\tstruct arg_str* ${prefix}_$g->{name};\n";
-        push @init, "\t${prefix}_$g->{name} = arg_strn($short, \"$g->{name}\", $type, 0, 10, \"$g->{description}\"),\n";
+        my $name = "${prefix}_$g->{name}";
+        push @def, "\tstruct arg_str* $name;\n";
+        push @init, "\t$name = arg_strn($short, \"$g->{name}\", $type, 0, 10, \"$g->{description}\"),\n";
     }
     return (\@def, \@init);
 }
 
+# Returns an item given a configuration object and a
+# libconfig path, e.g. "application.window.size"
+sub get_item {
+    my ($root, $path) = @_;
+    my $e = $root->{config};
+    my @p = split /\./, $path;
+    foreach my $p (@p) {
+        $e = (grep { $_->{name} eq $p } @{$e->{items}})[0];
+    }
+    return $e;
+}
+
 # Create code to copy group command line options to struct
 sub make_arg_cl_groups_copy {
-    my ($prefix, @groups) = @_;
+    my ($prefix, $root) = @_;
+
+    my @groups = @{$root->{cl_groups}};
 
     my $out;
     foreach my $g (@groups) {
-        my $st_name = "struct ${prefix}_$g->{list}_item";
+        # $g->{list} is a libconfig path to the list of
+        # groups, e.g. "application.books". It is turned to
+        # $typename, full name in C types("application_books")
+        # and $structname, path ("application->books")
+        my $typename = $g->{list};
+        $typename =~ s/\./_/g;
+        my $structname = $g->{list};
+        $structname =~ s/\./->/g;
+        my $st_name = "struct ${prefix}_${typename}_item";
         my $c_override = "/* No search for override */";
         if ($g->{override}) {
             my @override_setting = grep { $_->{path} eq $g->{override} } @{$g->{targets}};
-            my $override_val = $override_setting[0]->{value};
-            $c_override = <<EOF
-            for (i = 0; i < cfg->$g->{list}_len; i++) {
-                if (!strcmp(cfg->$g->{list} [i].$g->{override}, "$override_val")) {
-                    found = i;
-                    break;
-                }
+            my $override_val = "\"$override_setting[0]->{value}\"";
+            if ($override_val =~ /\$(\d+)/) {
+                $override_val = "${prefix}_$g->{name}->sval [cl_i] + pmatch[$1].rm_so";
             }
+            my $override_len = "pmatch[$1].rm_eo - pmatch[$1].rm_so";
+            $c_override = <<EOF
+        for (i = 0; i < cfg->${structname}_len; i++) {
+            if (!strncmp(cfg->${structname} [i].$g->{override}, $override_val,
+                         $override_len)) {
+                found = i;
+                break;
+            }
+        }
 EOF
+        }
+        my $target = get_item($root, $g->{list});
+        if ($target->{type} eq 'list') {
+            $c_override .= <<EOF;
+        if (found == -1) {
+            cfg->${structname }_len++;
+            cfg->${structname } = realloc(cfg->${structname }, cfg->${structname }_len * sizeof(*cfg->${structname }));
+            group = & cfg->${structname } [cfg->${structname }_len - 1];
+        } else {
+            group = & cfg->${structname } [found];
+        }
+EOF
+        } elsif ($target->{type} eq 'group') {
+            $c_override = "\tgroup = cfg->${structname};\n";
+        } else {
+            die "$g->{name}: Illegal target type `$target->{type}' (must be list or group)\n";
         }
         my $esc_pattern = $g->{pattern};
         $esc_pattern =~ s/\\/\\\\/g;
-                        
+
         $out .= <<EOF;
 #define MAX_MATCH 10
     for (cl_i = 0; cl_i < ${prefix}_$g->{name}->count; cl_i++) {
@@ -641,20 +686,17 @@ EOF
             exit(1);
         }
         res = regexec(&preg, ${prefix}_$g->{name}->sval [cl_i], MAX_MATCH, &pmatch[0], 0);
-        if (!res) {
-            int param_len, i, found = 0;
-            $st_name* group;
+        if (res) {
+            fprintf(stderr, "--$g->{name} %s: Illegal argument\\n", ${prefix}_$g->{name}->sval [cl_i]);
+            exit(1);
+        }
+        
+        int param_len, i, found = -1;
+        $st_name* group;
 
 $c_override
-            if (!found) {
-                cfg->$g->{list}_len++;
-                cfg->$g->{list} = realloc(cfg->$g->{list}, cfg->$g->{list}_len * sizeof(*cfg->$g->{list}));
-                group = & cfg->$g->{list} [cfg->$g->{list}_len - 1];
-            } else {
-                group = & cfg->$g->{list} [found];
-            }
 
-            ${prefix}_$g->{list}_init(group);
+        ${prefix}_${typename}_init(group);
 EOF
         foreach my $t (@{$g->{targets}}) {
             my $v = $t->{value};
@@ -667,19 +709,28 @@ EOF
                 $l = length $v;
                 $v = "\"$v\"";
             }
+            my $item = get_item($root, "$g->{list}.$t->{path}");
+            if ($item->{type} eq 'string') {
             $out .= <<EOF
-            param_len = $l;
-            group->$t->{path} = calloc(1, param_len + 1);
-            memcpy(group->$t->{path}, $v, param_len);
+        param_len = $l;
+        group->$t->{path} = calloc(1, param_len + 1);
+        memcpy(group->$t->{path}, $v, param_len);
 EOF
-        }
-        $out .= <<EOF;
-        } else {
-            fprintf(stderr, "--$g->{name} %s: Illegal argument\\n", ${prefix}_$g->{name}->sval [cl_i]);
-            exit(1);
-        }
-    }
+
+            } elsif ($item->{type} =~ /int|int64|float/) {
+                my $fmt = {
+                    "int" => "%d",
+                    "int64" => "%ld",
+                    "float" => "%lf",
+                }->{$item->{type}};
+                $out .= <<EOF;
+        sscanf($v, "$fmt", &group->$t->{path});
 EOF
+            } else {
+                die "$t->{path}: type `$item->{type}' not supported in compound opions\n";
+            }
+        }
+        $out .= "    }\n";
     }
     return $out;
 }
@@ -780,7 +831,7 @@ sub make_argtable {
     push @$r_def, @$r_def2;
     push @$r_init, @$r_init2;
 
-    my $cl_groups_copy = make_arg_cl_groups_copy($prefix, @{$root->{cl_groups}});
+    my $cl_groups_copy = make_arg_cl_groups_copy($prefix, $root);
 
     my $copy = make_argtable_copy2struct($prefix, $setting);
 
