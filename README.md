@@ -58,6 +58,8 @@ configuration file.
 - `includes`: Array of header files that will be included
   first thing in the generated header file. This allows to
 define types that are used as `runtime` data.
+- `cl_groups`: List of compound command-line options that
+  allow to set an entire group in one option. See below.
 
 Settings
 --------
@@ -90,14 +92,21 @@ during runtime (i.e. it won't be declared `const`).
 Groups
 ------
 
-Group entries must contain an `items` setting which contains
-a list of named settings. Groups can contain items of any type.
+Group entries take the following options:
+
+- `name`: mandatory
+- `items`: mandatory, it is a  a list of named settings. Groups can contain items of any type.
+- `no_cl_accessors`: optional boolean, set to true to
+  disable the generation of command-line accessors for this
+group. Typically used when you specify a compound option
+with `cl_groups`.
+
 
 Lists
 -----
 
-List entries must contain an `items` setting which contains
-the list of setting expected in each item of the list.
+List entries take the same settings as groups.
+
 Lists can contain anything, including other lists.
 
 Note this does not support items of varying types, as is
@@ -114,6 +123,33 @@ the array.
 Lists and arrays both get converted to a static array. A
 field `<name>_len` is added containing the number of
 elements in the array.
+
+cl_groups
+---------
+
+This creates command-line options that set an entire group.
+Each item in the list is a group composed of:
+
+- `name`: command-line option name
+- `pattern`: POSIX Extended Regular Expression used to parse
+  the argument to the option
+- `description`: Textual description printed when parsing
+  failed
+- `short`: optional, single-character equivalent
+- `argdesc`: optional, textual description of the argument
+  format to be printed in help text
+- `list`: libconfig path to the group
+- `targets`: list of fields that will be set by the option.
+  Each field is a group composed of:
+        - `path`: field name in the group
+        - `value`: a literal, or a backreference to the
+          regular expression capture groups, expressed in
+dollar-notation (`$1`, `$2`, and so on).
+- `override`: optional, for list targets, specifies the name
+  of the field to compare the argument to to decide if the
+element should be added to the list, or override an existing
+element.
+
 
 
 Generated API
