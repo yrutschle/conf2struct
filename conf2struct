@@ -875,6 +875,8 @@ int ${prefix}_cl_parse(int argc, char* argv[], struct ${prefix}_item* cfg) {
         return 0;
     }
 
+    ${prefix}_init(cfg);
+
     if (${prefix}_conffile->count) {
         if (!${prefix}_parse_file(${prefix}_conffile->filename[0], cfg, &errmsg)) {
             fprintf(stderr, "%s\\n", errmsg);
