@@ -731,6 +731,8 @@ EOF
                 $out .= <<EOF;
         sscanf($v, "$fmt", &group->$t->{path});
 EOF
+            } elsif ($item->{type} =~ /boolean/) {
+                $out .= "\tgroup->$t->{path} = *((char*)$v) - '0';\n";
             } else {
                 die "$t->{path}: type `$item->{type}' not supported in compound opions\n";
             }

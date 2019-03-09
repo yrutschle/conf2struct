@@ -144,7 +144,8 @@ Each item in the list is a group composed of:
         - `path`: field name in the group
         - `value`: a literal, or a backreference to the
           regular expression capture groups, expressed in
-dollar-notation (`$1`, `$2`, and so on).
+dollar-notation (`$1`, `$2`, and so on). Literal booleans
+are specified as integers worth 0 or 1.
 - `override`: optional, for list targets, specifies the name
   of the field to compare the argument to to decide if the
 element should be added to the list, or override an existing
