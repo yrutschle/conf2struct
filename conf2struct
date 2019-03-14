@@ -462,7 +462,7 @@ $out
 EOF
         } elsif ($setting->{type} eq 'group') {
             my $hname = "${name}_${sname}";
-            my $pname = "${hname}_print";
+            my $pname = "${hname}_fprint";
             my $c = make_print_settings($hname, $setting);
             $out = <<EOF
 $c
