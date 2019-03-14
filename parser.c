@@ -16,6 +16,6 @@ void main(int argc, char* argv[]) {
         exit(1);
     }
     printf("from command line:\n");
-    eg_print(&config_cl,0);
+    eg_fprint(stdout, &config_cl,0);
 }
 
