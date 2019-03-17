@@ -156,11 +156,7 @@ sub make_struct_header {
     my ($prefix, $setting) = @_;
 
     my ($s, $l) = make_decl_list($prefix, $setting);
-    my $out = "$s\nstruct ${prefix}_item {\n$l";
-    if (exists $setting->{runtime_type}) {
-        $out .= "\t$setting->{runtime_type}\tdata;\n";
-    }
-    $out .= "};\n";
+    my $out = "$s\nstruct ${prefix}_item {\n$l};\n";
     return $out;
 }
 
