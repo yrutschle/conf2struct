@@ -715,6 +715,7 @@ EOF
                 $v = "\"$v\"";
             }
             my $item = get_item($root, "$g->{list}.$t->{path}");
+            die "$t->{path}: unknown option\n" if not defined $item->{type};
             if ($item->{type} eq 'string') {
             $out .= <<EOF
         param_len = $l;
@@ -734,7 +735,7 @@ EOF
             } elsif ($item->{type} =~ /boolean/) {
                 $out .= "\tgroup->$t->{path} = *((char*)$v) - '0';\n";
             } else {
-                die "$t->{path}: type `$item->{type}' not supported in compound opions\n";
+                die "$t->{path}: type `$item->{type}' not supported in compound options\n";
             }
         }
         $out .= "    }\n";
