@@ -486,9 +486,18 @@ EOF
             # Don't print it, we know nothing about it
         } else {
             my $fmt = scalar_type_print $setting->{type};
-            $out .= <<EOF
+            $out .= <<EOF;
         indent(out, depth);
-        fprintf(out, "${sname}: $fmt\\n", $name->${sname});
+        fprintf(out, "${sname}: $fmt", $name->${sname});
+EOF
+            if ($setting->{optional}) {
+                $out .= <<EOF
+        if (! $name->${sname}_is_present)
+            fprintf(out, " <unset>");
+EOF
+            }
+            $out .= <<EOF;
+        fprintf(out, "\\n");
 EOF
         }
     }
