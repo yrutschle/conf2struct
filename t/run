@@ -1,0 +1,179 @@
+#! /usr/bin/perl -w
+
+# Test suite for config2struct
+# Usage:
+#     ./run             # run all tests
+#     ./run 1 3 5       # run specified tests
+# 
+
+
+use Test::More;
+use Getopt::Long;
+
+
+my ($coverage);
+GetOptions(
+    'cover' => \$coverage,
+);
+
+
+my @tests = (
+    {
+        schema => 'in1.sch',
+        data => 'in1.data',
+        parser => 'parser.c',
+        cmd => '-F in1.data',
+        out => 'out1a.txt',
+        desc => "documentation example"
+    },
+    {
+        schema => 'in1.sch',
+        data => 'in1.data',
+        parser => 'parser.c',
+        cmd => '-F in1.data --size 800,600',
+        out => 'out1b.txt',
+        desc => "Compound option with no override"
+    },
+    {
+        schema => 'in1.sch',
+        data => 'in1.data',
+        parser => 'parser.c',
+        cmd => '-F in1.data --book "Snow Crash","Neal Stephenson",12,3.14',
+        out => 'out1c.txt',
+        desc => "Compound option with override",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2a.data',
+        parser => 'parser.c',
+        cmd => '-F in2a.data',
+        out => 'out2a.txt',
+        desc => "Basic with defaults",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2b.data',
+        parser => 'parser.c',
+        cmd => '-F in2b.data',
+        out => 'out2b.txt',
+        desc => "Override defaults",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data',
+        out => 'out2c.txt',
+        desc => "Set optional settings",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data --group1 1,23,"hello world"',
+        out => 'out2d.txt',
+        desc => "Compound option for group",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data --list_edit 1,23,"hello world"',
+        out => 'out2e.txt',
+        desc => "Compound option for list, append",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data --list_edit 1,23,second',
+        out => 'out2f.txt',
+        desc => "Compound option for list, replace",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data --list_add 1,23',
+        out => 'out2g.txt',
+        desc => "Compound option for list, append with inited string",
+    },
+);
+
+# Only keep selected tests
+@tests = @tests[ map { $_ - 1 } @ARGV ] if @ARGV;
+
+die "No test specified?\n" unless defined $tests[0];
+
+sub prep_test_dir {
+    my ($test) = @_;
+    my $tdir = "tmp_$test->{schema}";
+    -d $tdir or mkdir "$tdir" or die "mkdir $tdir: $!\n"; 
+    `cp -n ../argtable3.h $tdir`;
+    `cp -n ../argtable3.c $tdir`;
+    `cp -n Makefile $tdir`;
+    `cp -n $test->{schema} $tdir`;
+    `cp -n $test->{data} $tdir`;
+    `cp -n $test->{parser} $tdir/parser.c`;
+    return $tdir;
+}
+
+
+`rm -rfv tmp_*`;
+`cover -delete` if $coverage;
+die "Unable to clear coverage analysis.\n" if $?;
+
+my @results;
+my $tnum = 1;
+foreach my $test (@tests) {
+    my $dir = prep_test_dir($test);
+    chdir $dir or die "chdir $dir: $!\n";
+
+    my $opts = "";
+    $opts .= '-MDevel::Cover="-silent,on,-db,../cover_db"' if $coverage;
+    my $make = "SCHEMA=$test->{schema} PARSER=$test->{parser} PERLOPTS=$opts make";
+    my $res = system($make);
+    ok($res == 0, "$test->{desc} makes correctly");
+    if ($res) {
+        diag("cmd: `$make`");
+    }
+
+    my $cmd = "./parser $test->{cmd} > $test->{out}";
+    $res = system($cmd);
+    ok($res, "$test->{desc} runs");
+
+    $res = system("diff -u ../$test->{out} $test->{out}");
+    ok($res == 0, "$test->{desc} returns correctly");
+    if ($res) {
+        diag("cmd: `$cmd`");
+    }
+
+    chdir "..";
+    $tnum++;
+}
+
+
+done_testing();
+
+if ($coverage) {
+    system "cover"; 
+    die "Unable to generate coverage status.\n" if $?;
+    warn "Coverage report generated in cover_db/coverage.html\n";
+}
+
+
+
+format test_results_top =
+ID  | Description                                                       | Status
+----+-------------------------------------------------------------------+-------
+.
+
+format test_results = 
+@>> | @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< |   @>>
+$_->[0], $_->[1], $_->[2] ? "NOK" : "OK"
+.
+
+format_name STDOUT "test_results";
+format_top_name STDOUT "test_results_top";
+map { write; } @results;
+

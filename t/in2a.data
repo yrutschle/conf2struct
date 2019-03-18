@@ -1,0 +1,51 @@
+mybool: true;
+myint: 23;
+myint64: 8745348923487324;
+myfloat: 2.71828182846;
+mystring: "global mandatory string";
+
+myvarstr: "a variable string";
+
+group: {
+    gmybool: true;
+    gmyint: 32;
+    gmyint64: 12;
+    gmyfloat: 3.14;
+    gmystring: "string in group";
+}
+
+dgroup: {
+dlvl2: {
+dlvl3: {
+gdmybool: false;
+gdmyint: 322;
+gdmyint64: 123;
+gdmyfloat: 3.141;
+gdmystring: "string in deep group";
+       }
+       }
+        }
+
+list: (
+          {
+lmybool: false;
+lmyint: 21322;
+lmyint64: 321123;
+lmyfloat: 3.14159213456789;
+lmystring: "first";
+          },
+          {
+lmybool: false;
+lmyint: 12232;
+lmyint64: 231213;
+lmyfloat: 3.21314145675989;
+lmystring: "second";
+          },
+          {
+lmybool: true;
+lmyint: 22213;
+lmyint64: 123321;
+lmyfloat: .14159213456789;
+lmystring: "third";
+          }
+      );

@@ -1,0 +1,28 @@
+version: 1.0
+application:
+    window:
+        title: My Application
+        size:
+            w: 640
+            h: 480
+        pos:
+            x: 350
+            y: 250
+    books [2]:
+        title: Treasure Island
+        author: Robert Louis Stevenson
+        price: 29.950000
+        qty: 5
+        title: Snow Crash
+        author: Neal Stephenson
+        price: 12.000000
+        qty: 3
+    misc:
+        pi: 3.141593
+        bigint: 9223372036854775807
+        columns [3]:
+            0:	Last Name
+            1:	First Name
+            2:	MI
+        bitmask: 8131
+        umask: 27

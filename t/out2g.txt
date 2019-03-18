@@ -1,0 +1,51 @@
+mybool: 1
+myint: 23
+myint64: 939881564
+myfloat: 2.718282
+mystring: global mandatory string
+mymbool: 1
+mymint: 42
+mymint64: 42
+mymfloat: 3.141590
+mymstring: hello world
+myobool: 1
+myoint: 54
+myoint64: 57
+myofloat: 2.230000
+myostring: good bye cruel world
+myvarstr: a variable string
+group:
+    gmybool: 1
+    gmyint: 32
+    gmyint64: 12
+    gmyfloat: 3.140000
+    gmystring: string in group
+dgroup:
+    dlvl2:
+        dlvl3:
+            gdmybool: 0
+            gdmyint: 322
+            gdmyint64: 123
+            gdmyfloat: 3.141000
+            gdmystring: string in deep group
+list [4]:
+    lmybool: 0
+    lmyint: 21322
+    lmyint64: 321123
+    lmyfloat: 3.141592
+    lmystring: first
+    lmybool: 0
+    lmyint: 12232
+    lmyint64: 231213
+    lmyfloat: 3.213141
+    lmystring: second
+    lmybool: 1
+    lmyint: 22213
+    lmyint64: 123321
+    lmyfloat: 0.141592
+    lmystring: third
+    lmybool: 1
+    lmyint: 23
+    lmyint64: 12341234
+    lmyfloat: 0.000000
+    lmystring: initialised string
