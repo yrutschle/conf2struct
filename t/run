@@ -148,6 +148,9 @@ foreach my $test (@tests) {
         diag("cmd: `$cmd`");
     }
 
+    `lcov --directory . --capture --output-file sslh_cov.info`;
+    `genhtml sslh_cov.info`;
+
     chdir "..";
     $tnum++;
 }
