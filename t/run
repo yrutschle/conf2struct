@@ -4,7 +4,7 @@
 # Usage:
 #     ./run             # run all tests
 #     ./run 1 3 5       # run specified tests
-# 
+#     ./run -l          # list all tests
 
 
 use Test::More;
@@ -14,6 +14,7 @@ use Getopt::Long;
 my ($coverage);
 GetOptions(
     'cover' => \$coverage,
+    'list' => \$list_tests,
 );
 
 
@@ -104,6 +105,25 @@ my @tests = (
 @tests = @tests[ map { $_ - 1 } @ARGV ] if @ARGV;
 
 die "No test specified?\n" unless defined $tests[0];
+
+#####List all tests
+format test_list_top =
+ID  | Description
+----+-------------------------------------------------------------------------
+.
+format test_list =
+@>> | @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$_->{'index'}, $_->{'desc'};
+.
+if ($list_tests) {
+    format_name STDOUT "test_list";
+    format_top_name STDOUT "test_list_top";
+    my $i = 1;
+    map { $_->{'index'} = $i++ } @tests;
+    map { write; } @tests;
+    exit 0;
+}
+#####/list
 
 sub prep_test_dir {
     my ($test) = @_;
