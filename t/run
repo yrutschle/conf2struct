@@ -99,6 +99,14 @@ my @tests = (
         out => 'out2g.txt',
         desc => "Compound option for list, append with inited string",
     },
+    {
+        schema => 'in2.sch',
+        data => 'in2d.data',
+        parser => 'parser.c',
+        cmd => '-F in2d.data',
+        out => 'out2h.txt',
+        desc => "No config file",
+    },
 );
 
 # Only keep selected tests
@@ -117,6 +125,8 @@ $_->{'index'}, $_->{'desc'};
 .
 if ($list_tests) {
     format_name STDOUT "test_list";
+    my $i = 1;
+    map { $_->{'index'} = $i++ } @tests;
     format_top_name STDOUT "test_list_top";
     my $i = 1;
     map { $_->{'index'} = $i++ } @tests;
@@ -158,7 +168,7 @@ foreach my $test (@tests) {
         diag("cmd: `$make`");
     }
 
-    my $cmd = "./parser $test->{cmd} > $test->{out}";
+    my $cmd = "./parser $test->{cmd} > $test->{out} 2>&1";
     $res = system($cmd);
     ok($res, "$test->{desc} runs");
 
