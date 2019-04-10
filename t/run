@@ -128,7 +128,7 @@ if ($list_tests) {
     my $i = 1;
     map { $_->{'index'} = $i++ } @tests;
     format_top_name STDOUT "test_list_top";
-    my $i = 1;
+    $i = 1;
     map { $_->{'index'} = $i++ } @tests;
     map { write; } @tests;
     exit 0;
@@ -168,7 +168,7 @@ foreach my $test (@tests) {
         diag("cmd: `$make`");
     }
 
-    my $cmd = "./parser $test->{cmd} > $test->{out} 2>&1";
+    my $cmd = "stdbuf -o0 -e0 ./parser $test->{cmd} > $test->{out} 2>&1";
     $res = system($cmd);
     ok($res, "$test->{desc} runs");
 

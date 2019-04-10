@@ -13,21 +13,21 @@ config: {
          type: "list",
          items: (
             # Mandatory
-            { name: "mybool"; type: "boolean"; short: "b"; },
+            { name: "mybool"; type: "bool"; short: "b"; },
             { name: "myint"; type: "int"; short: "i"; },
             { name: "myint64"; type: "int64"; short: "I"; },
             { name: "myfloat"; type: "float";  short: "f"; },
             { name: "mystring"; type: "string";  short: "s"; },
 
             # Mandatory with default
-            { name: "mymbool"; type: "boolean"; default: true; },
+            { name: "mymbool"; type: "bool"; default: true; },
             { name: "mymint"; type: "int";  default: 42; },
             { name: "mymint64"; type: "int64"; default: 42; },
             { name: "mymfloat"; type: "float"; default: 3.14159;  },
             { name: "mymstring"; type: "string"; default: "hello world"; },
 
             # Optional
-            { name: "myobool"; type: "boolean"; optional: true; },
+            { name: "myobool"; type: "bool"; optional: true; },
             { name: "myoint"; type: "int";  optional: true;},
             { name: "myoint64"; type: "int64"; optional: true; },
             { name: "myofloat"; type: "float";  optional: true; },
@@ -40,7 +40,7 @@ config: {
             { name: "group", 
                 type: "group", 
                 items: (
-                    { name: "gmybool"; type: "boolean"; short: "b"; },
+                    { name: "gmybool"; type: "bool"; short: "b"; },
                     { name: "gmyint"; type: "int"; short: "i"; },
                     { name: "gmyint64"; type: "int64"; short: "I"; },
                     { name: "gmyfloat"; type: "float";  short: "f"; },
@@ -54,7 +54,7 @@ config: {
               items: (
               {name: "dlvl2"; type: "group"; items: (
                   {name: "dlvl3"; type: "group"; items: (
-                      { name: "gdmybool"; type: "boolean"; short: "b"; },
+                      { name: "gdmybool"; type: "bool"; short: "b"; },
                       { name: "gdmyint"; type: "int"; short: "i"; },
                       { name: "gdmyint64"; type: "int64"; short: "I"; },
                       { name: "gdmyfloat"; type: "float";  short: "f"; },
@@ -68,7 +68,7 @@ config: {
             { name: "list",
                 type: "list",
                 items: (
-                      { name: "lmybool"; type: "boolean"; short: "b"; },
+                      { name: "lmybool"; type: "bool"; short: "b"; },
                       { name: "lmyint"; type: "int"; short: "i"; },
                       { name: "lmyint64"; type: "int64"; short: "I"; },
                       { name: "lmyfloat"; type: "float";  short: "f"; },

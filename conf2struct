@@ -50,17 +50,16 @@ my $parser = $hr->{parser};
 
 
 ################################################################################
-# Turns a libconfig type to a C type
+# Turns a libconfig type to a C type or undef if unknown type
 sub scalar_type {
     my ($in) = @_;
     my $out = {
-        'boolean' => 'int',
+        'bool' => 'int',
         'int' => 'int',
         'int64' => 'long long',
         'float' => 'double',
         'string' => 'const char*',
     }->{$in};
-    die "Unknown setting $in\n" unless defined $out;
     return $out;
 }
 
@@ -69,7 +68,7 @@ sub scalar_type {
 sub scalar_type_lookup {
     my ($in) = @_;
     {
-        'boolean'       => 'config_setting_lookup_bool',
+        'bool'          => 'config_setting_lookup_bool',
         'int'           => 'config_setting_lookup_int',
         'int64'         => 'config_setting_lookup_int64',
         'float'         => 'config_setting_lookup_float',
@@ -81,7 +80,7 @@ sub scalar_type_lookup {
 sub scalar_type_get {
     my ($in) = @_;
     {
-        'boolean'       => 'config_setting_get_bool',
+        'bool'       => 'config_setting_get_bool',
         'int'           => 'config_setting_get_int',
         'int64'         => 'config_setting_get_int64',
         'float'         => 'config_setting_get_float',
@@ -94,7 +93,7 @@ sub scalar_type_get {
 sub scalar_type_print {
     my ($in) = @_;
     {
-        'boolean' => '%d',
+        'bool' => '%d',
         'int' => '%d',
         'int64' => "%ld",
         'float' => "%f",
@@ -109,6 +108,223 @@ sub cfgname2c {
     $name =~ s/-/_/g;
     return $name;
 }
+
+
+################################################################################
+# C code included in output
+
+my %snippets = (
+header => <<'EOF',
+
+/* This gets included in the output .c file */
+
+
+/* config_type and lookup_fns are related, keep them together */
+typedef enum {
+    CFG_BOOL,
+    CFG_INT,
+    CFG_INT64,
+    CFG_FLOAT,
+    CFG_STRING,
+    CFG_GROUP,
+    CFG_ARRAY,
+    CFG_LIST,
+} config_type;
+
+typedef int (*lookup_fn)(const config_setting_t*, const char*, void*);
+lookup_fn lookup_fns[] = {
+    (lookup_fn)config_setting_lookup_bool,
+    (lookup_fn)config_setting_lookup_int,
+    (lookup_fn)config_setting_lookup_int64,
+    (lookup_fn)config_setting_lookup_float,
+    (lookup_fn)config_setting_lookup_string,
+    #if 0
+    NULL,  /* CFG_GROUP */
+    NULL,  /* CFG_ARRAY */
+    NULL,  /* CFG_LIST */
+    #endif
+};
+
+typedef union {
+    int def_bool;
+    int def_int;
+    long long def_int64;
+    double def_float;
+    const char* def_string;
+} any_val;
+
+typedef struct {
+    any_val val;
+} s_any_val;
+
+/* Copy the value of a setting to an arbitrary memory that
+* must be large enough */
+void settingcpy(config_type type, void* target, const config_setting_t* setting)
+{
+    any_val val;
+    switch(type) {
+    case CFG_BOOL:
+        val.def_bool = config_setting_get_bool(setting);
+        *(int*)target = val.def_bool;
+        break;
+
+    case CFG_INT:
+        val.def_int = config_setting_get_int(setting);
+        *(int*)target = val.def_int;
+        break;
+
+    case CFG_INT64:
+        val.def_int64 = config_setting_get_int64(setting);
+        *(long long*)target = val.def_int64;
+        break;
+
+    case CFG_FLOAT:
+        val.def_float = config_setting_get_float(setting);
+        *(double*)target = val.def_int64;
+        break;
+
+    case CFG_STRING:
+        val.def_string = config_setting_get_string(setting);
+        *(char**)target = val.def_string;
+        break;
+
+    default:
+        fprintf(stderr, "Unknown type specification %d\n", type);
+        exit(1);
+    }
+
+}
+
+struct config_entry {
+    const char* name;
+    int type;
+    struct config_entry* sub_group;
+    size_t offset;  /* Offset of setting in the structure */
+    size_t offset_len; /* Offset of *_len field, for arrays and lists */
+    size_t offset_present; /* offset of *_is_present field, for optional settings */
+    size_t size;   /* Size of element, or size of group for groups and lists */
+    int array_type; /* type of array elements, when type == CFG_ARRAY */
+    int mandatory;
+    int optional;
+    any_val default_val;
+};
+
+EOF
+
+
+c_read_block => <<'EOF',
+
+void print_setting(config_type type, void* val)
+{
+    switch(type) {
+    case CFG_BOOL:
+    case CFG_INT:
+        printf("%d", *(int*)val);
+        break;
+    case CFG_INT64:
+        printf("%lld", *(long*)val);
+        break;
+    case CFG_FLOAT:
+        printf("%f", *(double*)val);
+        break;
+    case CFG_STRING:
+        printf("`%s'", *(char**)val);
+        break;
+    }
+}
+
+/* Reads from libconfig object `cfg` into struct `setting` */
+int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, const char** errmsg)
+{
+    lookup_fn lookup_fn;
+    s_any_val val;
+    config_setting_t* s;
+    void* block;
+    size_t len;
+    int res; char out[128] = {0};
+
+    for (; e->name; e++) {
+//        printf("reading %s%s%s: ", e->optional ? "optional " : "", e->mandatory ? "mandatory " : "",  e->name);
+        memset((char*)setting + e->offset, e->size, 0);
+        if (s = config_setting_lookup(cfg, e->name)) {
+            switch (e->type) {
+            case CFG_LIST:
+            case CFG_ARRAY:
+                len = config_setting_length(s);
+                block = malloc(e->size * len);
+                for (int i = 0; i < len; i++) {
+                    config_setting_t* elem = config_setting_get_elem(s, i);
+                    if (e->type == CFG_LIST) {
+                        if (!read_block(elem, (char*)block + e->size * i, e->sub_group, errmsg))
+                            return 0;
+                    } else { /* CFG_ARRAY */
+                        settingcpy(e->array_type, (char*)block + e->size * i, elem);
+ //                       printf("[%d] = ", i);
+ //                       print_setting(e->array_type, (char*)block + e->size *i); printf("\n");
+                    }
+                }
+                *(size_t*)(((char*)setting) + e->offset_len) = len;
+                *(void**)(((char*)setting) + e->offset) = block;
+                break;
+
+            case CFG_GROUP:
+                block = malloc(e->size);
+                if (!read_block(s, block, e->sub_group , errmsg)) return 0;
+                *(void**)(((char*)setting) + e->offset) = block;
+                break;
+
+
+            default:
+                lookup_fn = lookup_fns[e->type];
+                if (lookup_fn(cfg, e->name, ((char*)setting) + e->offset) == CONFIG_FALSE) {
+                    asprintf(errmsg, "Parsing of option \"%s\" failed", e->name);
+                    return 0;
+                }
+ //               print_setting(e->type, (((char*)setting) + e->offset)); printf("\n");
+            }
+            if (e->optional) { /* set field _is_present = 1 */
+ //               printf("set optional at offset: %X sizeof(int)=%d\n",  e->offset,sizeof(int));
+                *(int*)((char*)setting + e->offset_present) = 1;
+            }
+        } else {
+ //           printf("not found ");
+            if (e->mandatory && !e->optional) {
+                asprintf(errmsg, "Mandatory option \"%s\" not found", e->name);
+                return 0;
+            }
+//            printf(", setting to "); print_setting(e->type, &e->default_val); printf("\n");
+            memcpy(((char*)setting) + e->offset, &e->default_val, e->size);
+        }
+    }
+    return 1;
+}
+
+/* Public parser API: returns 0 on failure, 1 on success */
+int eg_parse_file(const char* filename, struct eg_item* cfg, const char**errmsg)
+{
+    config_t c;
+
+    config_init(&c);
+    if (config_read_file(&c, filename) == CONFIG_FALSE) {
+        if (config_error_line(&c) != 0) {
+           asprintf(errmsg, "%s:%d:%s", 
+                    filename,
+                    config_error_line(&c),
+                    config_error_text(&c));
+           return 0;
+        }
+        asprintf(errmsg, "%s:%s", filename, config_error_text(&c));
+        return 0;
+    }
+    return read_block(config_lookup(&c, "/"), cfg, table_eg, errmsg);
+}
+
+EOF
+);
+
+
+# / C code
+################################################################################
 
 ################################################################################
 # HEADER GENERATION
@@ -257,121 +473,76 @@ EOF
 ################################################################################
 # PARSER GENERATION
 ################################################################################
-sub make_parser {
+sub make_table {
     my ($name, $top_setting) = @_;
     my @settings = @{$top_setting->{items}};
 
     my $out = <<EOF;
-static int ${name}_parser(
-        config_setting_t* cfg, 
-        struct ${name}_item* $name, 
-        const char** errmsg) 
-{
-        config_setting_t* setting;
-        char* tmp;
-        *errmsg = NULL;
 
-        ${name}_init($name);
+static struct config_entry table_${name}[] = {
 
 EOF
 
     foreach my $setting (@settings) {
+        next if $setting->{type} eq 'runtime';
+
         my $sname = cfgname2c $setting->{name};
-        if ($setting->{type} eq 'list') {
-            my $hname = "${name}_${sname}";
-            my $pname = "${hname}_parser";
-            my $c = make_parser($hname, $setting);
-            $out = <<EOF;
-$c
-$out
-        $name->${sname} = NULL;
-        $name->${sname}_len = 0;
-        if ((setting = config_setting_lookup(cfg, \"${sname}\"))) {
-            int len = config_setting_length(setting);
-            $name->${sname} = malloc(len * sizeof(*$name->${sname}));
-            $name->${sname}_len = len;
-            for (int i = 0; i < len; i++) {
-                config_setting_t* s = config_setting_get_elem(setting, i);
-                int res = $pname(s, &$name->${sname}\[i\], errmsg);
-                if (!res) return 0;
-            }
+        my $hname = "${name}_${sname}";
+        my $cfg_type = uc "CFG_$setting->{type}";
+        my $optional = $setting->{optional} // "0";
+        my $default = $setting->{default};
+        my $mandatory = (not ($optional or $default)) ? 1 : 0;
+        if ($setting->{type} eq 'string') {
+            $default = defined $default ? "\"$default\"" : "NULL";
+        } else {
+            $default = $default // 0;
         }
-EOF
-        } elsif ($setting->{type} eq 'array') {
-            my $getname = scalar_type_get $setting->{element_type};
-            $out .= <<EOF
-        $name->${sname} = NULL;
-        $name->${sname}_len = 0;
-        if ((setting = config_setting_lookup(cfg, "${sname}"))) {
-            int len = config_setting_length(setting);
-            $name->${sname} = malloc(len * sizeof(*$name->${sname}));
-            $name->${sname}_len = len;
-            for (int i = 0; i < len; i++) {
-                config_setting_t* s = config_setting_get_elem(setting, i);
-                $name->${sname}\[i\] = $getname(s);
-            }
+        $default = ".default_val.def_$setting->{type} = $default";
+        print "!([$optional]+[$default]) = $mandatory\n";
+        my $sizeof = scalar_type $setting->{type};
+        my $offset_present = $setting->{optional} ? "offsetof(struct ${name}_item, ${sname}_is_present)" : 0;
+        my $c = "";
+        my $subtable = "NULL";
+        my $offset_len = 0;
+        my $array_type = -1;
+
+        if ($setting->{type} =~ /list|group/) {
+            $c = make_table($hname, $setting);
+            $subtable = "table_${hname}";
+            $sizeof = "struct ${hname}_item";
+            $default = ".default_val.def_int = 0";
         }
-EOF
-        } elsif ($setting->{type} eq 'group') {
-            my $hname = "${name}_${sname}";
-            my $pname = "${hname}_parser";
-            my $c = make_parser($hname, $setting);
-            $out = <<EOF
-$c
-$out
-        $name->${sname} = NULL;
-        if ((setting = config_setting_lookup(cfg, \"${sname}\"))) {
-            $name->${sname} = malloc(sizeof(*$name->${sname}));
-            int res = $pname(setting, $name->${sname}, errmsg);
-            if (!res) return 0;
+        if ($setting->{type} =~ /list/) {
+            $offset_len = "offsetof(struct ${name}_item, ${sname}_len)";
         }
-                    
+
+        if ($setting->{type} =~ /array/) {
+            $offset_len = "offsetof(struct ${name}_item, ${sname}_len)";
+            $sizeof = scalar_type $setting->{element_type};
+            $default = $setting->{default} // 0;
+            $default = ".default_val.def_int = $default";
+            $array_type = uc "CFG_$setting->{element_type}";
+        }
+
+        $out = <<EOF;
+        $c $out
+        { 
+            /* name */          "$sname", 
+            /* type */          $cfg_type, 
+            /* subtable */      $subtable,
+            /* offset */        offsetof(struct ${name}_item, $sname),
+            /* offset_len */    $offset_len,
+            /* offset_present */ $offset_present,
+            /* size */          sizeof($sizeof), 
+            /* array_type */    $array_type,
+            /* mandatory */     $mandatory, 
+            /* optional */      $optional, 
+            /* default_val*/    $default 
+        },
 EOF
 
-        } elsif ($setting->{type} eq 'runtime') {
-            # Leave it alone
-        } else {
-
-            my $c_parse = scalar_type_lookup $setting->{type};
-            if (exists $setting->{default} or exists $setting->{optional}) {
-                my $set_present = "";
-                if ($setting->{optional}) {
-                    $set_present = "else {\n\t\t$name->${sname}_is_present = 1;\n\t}\n";
-                }
-                $out .= <<EOF;
-        if (config_setting_lookup(cfg, \"${sname}\")) {
-            if ($c_parse(cfg, \"${sname}\", &$name->${sname}) == CONFIG_FALSE) {
-                *errmsg = "Parsing of option \\\"${sname}\\\" failed";
-                return 0;
-            } $set_present;
-        }
-EOF
-            } else {
-                $out .= <<EOF;
-        if (config_setting_lookup(cfg, \"${sname}\")) {
-            if ($c_parse(cfg, \"${sname}\", &$name->${sname}) == CONFIG_FALSE) {
-                *errmsg = "Parsing of option \\\"${sname}\\\" failed";
-                return 0;
-            }
-        } else {
-            *errmsg = "Mandatory option \\\"$name.${sname}\\\" is missing";
-            return 0;
-        }
-EOF
-            }
-            if ($setting->{type} eq 'string' and
-                $setting->{var}) {
-                $out .= <<EOF;
-        if (asprintf(&tmp, "%s", $name->${sname}) == -1) {
-            *errmsg = "asprintf: cannot allocate memory";
-            return 0;
-        }
-        $name->${sname} = tmp;
-EOF
-            }
-        }
     }
-    $out .= "\treturn 1;\n}\n";
+    $out .= "\t{ 0 }\n};\n";
 
     return $out;
 }
@@ -384,6 +555,7 @@ $banner
 #include <string.h>
 #include <libconfig.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "$header"
 
 EOF
@@ -395,32 +567,12 @@ sub make_root_parser {
     my $setting = $root->{config};
     my $name = cfgname2c $setting->{name};
 
-    my $out = make_parser($name, $setting);
+    my $out = $snippets{header};
 
+    $out .= make_table($name, $setting);
 
-    # Add file reader (which is the only public parsing API)
-    $out .= <<EOF;
+    $out .= $snippets{c_read_block};
 
-/* Public parser API: returns 0 on failure, 1 on success */
-int ${name}_parse_file(const char* filename, struct ${name}_item* cfg, const char**errmsg)
-{
-    config_t c;
-
-    config_init(&c);
-    if (config_read_file(&c, filename) == CONFIG_FALSE) {
-        if (config_error_line(&c) != 0) {
-           asprintf(errmsg, "%s:%d:%s", 
-                    filename,
-                    config_error_line(&c),
-                    config_error_text(&c));
-           return 0;
-        }
-        asprintf(errmsg, "%s:%s", filename, config_error_text(&c));
-        return 0;
-    }
-    return ${name}_parser(config_lookup(&c, "/"), cfg, errmsg);
-}
-EOF
 
     return $out;
 }
@@ -533,7 +685,7 @@ EOF
 sub argtype {
     my ($in) = @_;
     my $out = {
-        'boolean' => 'arg_lit',
+        'bool' => 'arg_lit',
         'int' => 'arg_int',
         'int64' => 'arg_int',
         'float' => 'arg_dbl',
@@ -546,7 +698,7 @@ sub argtype {
 sub structtype {
     my ($in) = @_;
     my $out = {
-        'boolean' => 'count',
+        'bool' => 'count',
         'int' => 'ival',
         'int64' => 'ival',
         'float' => 'dval',
@@ -737,7 +889,7 @@ EOF
                 $out .= <<EOF;
         sscanf($v, "$fmt", &group->$t->{path});
 EOF
-            } elsif ($item->{type} =~ /boolean/) {
+            } elsif ($item->{type} =~ /bool/) {
                 $out .= "\tgroup->$t->{path} = *((char*)$v) - '0';\n";
             } else {
                 die "$t->{path}: type `$item->{type}' not supported in compound options\n";
@@ -817,7 +969,7 @@ EOF
                 $out .= "\t\tcfg->$name = $pname->ival [arg_index];\n";
             } elsif ($setting->{type} eq 'float') {
                 $out .= "\t\tcfg->$name = $pname->dval [arg_index];\n";
-            } elsif ($setting->{type} eq 'boolean') {
+            } elsif ($setting->{type} eq 'bool') {
                 $out .= "\t\tcfg->$name = $pname->count;\n";
             } elsif ($setting->{type} eq 'string') {
                 $out .= "\t\tcfg->$name = $pname->sval [arg_index];\n";
@@ -919,4 +1071,5 @@ print $c make_init($hr->{config}->{name}, $hr->{config});
 print $c make_root_parser($hr);
 print $c make_root_print_settings($hr);
 print $c make_argtable($hr);
+
 
