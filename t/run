@@ -103,9 +103,17 @@ my @tests = (
         schema => 'in2.sch',
         data => 'in2d.data',
         parser => 'parser.c',
-        cmd => '-F in2d.data',
+        cmd => '--list_edit 1,23,"hello world" --list_edit 0,24,"good bye world"',
         out => 'out2h.txt',
-        desc => "No config file",
+        desc => "No config file, add to list",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2d.data',
+        parser => 'parser.c',
+        cmd => '-i 2302 -I 2032 -s "hello"',
+        out => 'out2i.txt',
+        desc => "No config file, short options",
     },
 );
 

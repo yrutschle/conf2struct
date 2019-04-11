@@ -1,0 +1,41 @@
+mybool: 0
+myint: 0
+myint64: 0
+myfloat: 0.000000
+mystring: (null)
+mymbool: 1
+mymint: 42
+mymint64: 42
+mymfloat: 3.141590
+mymstring: hello world
+myobool: 0 <unset>
+myoint: 0 <unset>
+myoint64: 0 <unset>
+myofloat: 0.000000 <unset>
+myostring: (null) <unset>
+myvarstr: (null)
+group:
+    gmybool: 0
+    gmyint: 0
+    gmyint64: 0
+    gmyfloat: 0.000000
+    gmystring: (null)
+dgroup:
+    dlvl2:
+        dlvl3:
+            gdmybool: 0
+            gdmyint: 0
+            gdmyint64: 0
+            gdmyfloat: 0.000000
+            gdmystring: (null)
+list [2]:
+    lmybool: 1
+    lmyint: 23
+    lmyint64: 12341234
+    lmyfloat: 0.000000
+    lmystring: hello world
+    lmybool: 0
+    lmyint: 24
+    lmyint64: 12341234
+    lmyfloat: 0.000000
+    lmystring: good bye world
