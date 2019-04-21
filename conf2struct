@@ -126,7 +126,6 @@ typedef enum {
     CFG_INT64,
     CFG_FLOAT,
     CFG_STRING,
-    CFG_MAX_SCALAR,  /* Not a real type, index to separated scalars from groups */
     CFG_GROUP,
     CFG_ARRAY,
     CFG_LIST,
