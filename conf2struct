@@ -126,6 +126,7 @@ typedef enum {
     CFG_INT64,
     CFG_FLOAT,
     CFG_STRING,
+    CFG_MAX_SCALAR,  /* Not a real type, index to separated scalars from groups */
     CFG_GROUP,
     CFG_ARRAY,
     CFG_LIST,
@@ -159,7 +160,7 @@ typedef struct {
 
 /* Copy the value of a setting to an arbitrary memory that
 * must be large enough */
-void settingcpy(config_type type, void* target, const config_setting_t* setting)
+static void settingcpy(config_type type, void* target, const config_setting_t* setting)
 {
     any_val val;
     switch(type) {
@@ -192,13 +193,51 @@ void settingcpy(config_type type, void* target, const config_setting_t* setting)
         fprintf(stderr, "Unknown type specification %d\n", type);
         exit(1);
     }
+}
 
+/* Copy the value of a command line arg to arbitrary memory
+* that must be large enough for the type */
+static void clcpy(config_type type, void* target, const void* cl_arg)
+{
+    
+    any_val val;
+    switch(type) {
+    case CFG_BOOL:
+        val.def_bool = (*(struct arg_lit**)cl_arg)->count;
+        *(int*)target = val.def_bool;
+        break;
+
+    case CFG_INT:
+        val.def_int = (*(struct arg_int**)cl_arg)->ival[0];
+        *(int*)target = val.def_int;
+        break;
+
+    case CFG_INT64:
+        val.def_int64 = (*(struct arg_int**)cl_arg)->ival[0];
+        *(long long*)target = val.def_int64;
+        break;
+
+    case CFG_FLOAT:
+        val.def_float = (*(struct arg_dbl**)cl_arg)->dval[0];
+        *(double*)target = val.def_float;
+        break;
+
+    case CFG_STRING:
+        val.def_string = (*(struct arg_str**)cl_arg)->sval[0];
+        *(char**)target = val.def_string;
+        break;
+
+    default:
+        fprintf(stderr, "Unknown type specification %d\n", type);
+        exit(1);
+    }
 }
 
 struct config_entry {
     const char* name;
     int type;
-    struct config_entry* sub_group;
+    struct config_entry* sub_group; /* Table for compound types (list and group) */
+    void* arg_cl; /* command-line argument for this setting */
     size_t offset;  /* Offset of setting in the structure */
     size_t offset_len; /* Offset of *_len field, for arrays and lists */
     size_t offset_present; /* offset of *_is_present field, for optional settings */
@@ -214,27 +253,34 @@ EOF
 
 c_read_block => <<'EOF',
 
-void print_setting(config_type type, void* val)
+/* Enable debug to follow the parsing of tables */
+#if 0
+#define TRACE_READ(x) printf x
+#else
+#define TRACE_READ(x)
+#endif
+
+static void print_setting(config_type type, void* val)
 {
     switch(type) {
     case CFG_BOOL:
     case CFG_INT:
-        printf("%d", *(int*)val);
+        TRACE_READ(("%d", *(int*)val));
         break;
     case CFG_INT64:
-        printf("%lld", *(long*)val);
+        TRACE_READ(("%lld", *(long*)val));
         break;
     case CFG_FLOAT:
-        printf("%f", *(double*)val);
+        TRACE_READ(("%f", *(double*)val));
         break;
     case CFG_STRING:
-        printf("`%s'", *(char**)val);
+        TRACE_READ(("`%s'", *(char**)val));
         break;
     }
 }
 
 /* Reads from libconfig object `cfg` into struct `setting` */
-int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, const char** errmsg)
+static int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, const char** errmsg)
 {
     lookup_fn lookup_fn;
     s_any_val val;
@@ -244,7 +290,7 @@ int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, con
     int res; char out[128] = {0};
 
     for (; e->name; e++) {
-//        printf("reading %s%s%s: ", e->optional ? "optional " : "", e->mandatory ? "mandatory " : "",  e->name);
+        TRACE_READ(("reading %s%s%s: ", e->optional ? "optional " : "", e->mandatory ? "mandatory " : "",  e->name));
         memset((char*)setting + e->offset, e->size, 0);
         if (s = config_setting_lookup(cfg, e->name)) {
             switch (e->type) {
@@ -259,8 +305,8 @@ int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, con
                             return 0;
                     } else { /* CFG_ARRAY */
                         settingcpy(e->array_type, (char*)block + e->size * i, elem);
- //                       printf("[%d] = ", i);
- //                       print_setting(e->array_type, (char*)block + e->size *i); printf("\n");
+                        TRACE_READ(("[%d] = ", i));
+                        print_setting(e->array_type, (char*)block + e->size *i); TRACE_READ(("\n"));
                     }
                 }
                 *(size_t*)(((char*)setting) + e->offset_len) = len;
@@ -275,47 +321,85 @@ int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, con
 
 
             default:
+                /* First, lookup in config file */
                 lookup_fn = lookup_fns[e->type];
                 if (lookup_fn(cfg, e->name, ((char*)setting) + e->offset) == CONFIG_FALSE) {
                     asprintf(errmsg, "Parsing of option \"%s\" failed", e->name);
                     return 0;
                 }
- //               print_setting(e->type, (((char*)setting) + e->offset)); printf("\n");
+                print_setting(e->type, (((char*)setting) + e->offset)); TRACE_READ(("\n"));
             }
             if (e->optional) { /* set field _is_present = 1 */
- //               printf("set optional at offset: %X sizeof(int)=%d\n",  e->offset,sizeof(int));
+                TRACE_READ(("set optional at offset: %X sizeof(int)=%d\n",  e->offset,sizeof(int)));
                 *(int*)((char*)setting + e->offset_present) = 1;
             }
         } else {
- //           printf("not found ");
+            TRACE_READ(("not found "));
             if (e->mandatory && !e->optional) {
                 asprintf(errmsg, "Mandatory option \"%s\" not found", e->name);
                 return 0;
             }
-//            printf(", setting to "); print_setting(e->type, &e->default_val); printf("\n");
+            TRACE_READ((", setting to ")); print_setting(e->type, &e->default_val); TRACE_READ(("\n"));
             memcpy(((char*)setting) + e->offset, &e->default_val, e->size);
+        }
+        /* Then, override from command line */ 
+        if (e->arg_cl) {
+            /*(all arg_* structs start the same so we can cast to any arg_ type we want) */
+            if ((*(struct arg_int**)e->arg_cl)->count) {
+                TRACE_READ(("command line override to "));
+                clcpy(e->type, ((char*)setting) + e->offset, e->arg_cl);
+                print_setting(e->type, (((char*)setting) + e->offset)); TRACE_READ(("\n"));
+            }
         }
     }
     return 1;
 }
 
-/* Public parser API: returns 0 on failure, 1 on success */
-int eg_parse_file(const char* filename, struct eg_item* cfg, const char**errmsg)
+/* read config file `filename` into `c` */
+static int c2s_parse_file(const char* filename, config_t* c, const char**errmsg)
 {
-    config_t c;
-
-    config_init(&c);
-    if (config_read_file(&c, filename) == CONFIG_FALSE) {
-        if (config_error_line(&c) != 0) {
+    /* Read config file */
+    config_init(c);
+    if (config_read_file(c, filename) == CONFIG_FALSE) {
+        if (config_error_line(c) != 0) {
            asprintf(errmsg, "%s:%d:%s", 
                     filename,
-                    config_error_line(&c),
-                    config_error_text(&c));
+                    config_error_line(c),
+                    config_error_text(c));
            return 0;
         }
-        asprintf(errmsg, "%s:%s", filename, config_error_text(&c));
+        asprintf(errmsg, "%s:%s", filename, config_error_text(c));
         return 0;
     }
+    return 1;
+}
+
+int ##name_cl_parse(int argc, char* argv[], struct eg_item* cfg)
+{
+    int nerrors;
+    config_t c;
+    const char* errmsg;
+    void* argtable[] = {
+        ##r_init
+    };
+
+    /* Parse command line */
+    nerrors = arg_parse(argc, argv, argtable);
+    if (nerrors) {
+        arg_print_errors(stdout, ##name_end, "##name"); 
+        arg_print_syntax(stdout, argtable, "\\n");
+        arg_print_glossary(stdout, argtable, "  %-25s\t%s\\n");
+        return 0;
+    }
+
+
+    if (eg_conffile->count) {
+        if (!c2s_parse_file(eg_conffile->filename[0], &c, &errmsg)) {
+            fprintf(stderr, "%s\n", errmsg);
+            exit(1);
+        }
+    }
+
     return read_block(config_lookup(&c, "/"), cfg, table_eg, errmsg);
 }
 
@@ -387,6 +471,7 @@ $banner
 #ifndef C2S_${NAME}_H
 #define C2S_${NAME}_H
 #include <libconfig.h>
+
 
 EOF
 
@@ -498,19 +583,21 @@ EOF
             $default = $default // 0;
         }
         $default = ".default_val.def_$setting->{type} = $default";
-        print "!([$optional]+[$default]) = $mandatory\n";
         my $sizeof = scalar_type $setting->{type};
         my $offset_present = $setting->{optional} ? "offsetof(struct ${name}_item, ${sname}_is_present)" : 0;
         my $c = "";
-        my $subtable = "NULL";
+        my $sub_group = "NULL";
         my $offset_len = 0;
         my $array_type = -1;
 
+        my $arg_cl = "& ${name}_${sname}";
+
         if ($setting->{type} =~ /list|group/) {
             $c = make_table($hname, $setting);
-            $subtable = "table_${hname}";
+            $sub_group = "table_${hname}";
             $sizeof = "struct ${hname}_item";
             $default = ".default_val.def_int = 0";
+            $arg_cl = "NULL";
         }
         if ($setting->{type} =~ /list/) {
             $offset_len = "offsetof(struct ${name}_item, ${sname}_len)";
@@ -529,7 +616,8 @@ EOF
         { 
             /* name */          "$sname", 
             /* type */          $cfg_type, 
-            /* subtable */      $subtable,
+            /* sub_group*/      $sub_group,
+            /* arg_cl */        $arg_cl,
             /* offset */        offsetof(struct ${name}_item, $sname),
             /* offset_len */    $offset_len,
             /* offset_present */ $offset_present,
@@ -557,6 +645,8 @@ $banner
 #include <stdlib.h>
 #include <stddef.h>
 #include "$header"
+#include "argtable3.h"
+#include <regex.h>
 
 EOF
 }
@@ -568,11 +658,39 @@ sub make_root_parser {
     my $name = cfgname2c $setting->{name};
 
     my $out = $snippets{header};
+    my ($r_def, $r_init) = make_argtable_declarations($name, 1, $setting);
+    my ($r_def2, $r_init2) = make_argtable_cl_groups_decls($name, @{$root->{cl_groups}});
+    push @$r_def, @$r_def2;
+    push @$r_init, @$r_init2;
+
+    push @$r_def, "struct arg_end* ${name}_end;\n";
+    push @$r_init, "\t${name}_end = arg_end(10)\n";
+
+    # Add configuration file settings
+    die "conffile_option not set\n" unless defined $root->{conffile_option};
+    my ($short_opt, $long_opt) = @{$root->{conffile_option}};
+    unshift @$r_def, "struct arg_file* ${name}_conffile;\n";
+    unshift @$r_init, <<EOF;
+        ${name}_conffile = arg_filen("$short_opt", "$long_opt", "<file>", 0, 1, "Specify configuration file"),
+EOF
+
+    
+    $out .= <<EOF;
+@$r_def
+EOF
 
     $out .= make_table($name, $setting);
 
     $out .= $snippets{c_read_block};
 
+    # Interpolate variables
+    my %vars = (
+        r_init => "@$r_init",
+        name => "$name",
+    );
+    while (my ($vname, $vval) = each %vars) {
+        $out =~ s/##$vname/$vval/g;
+    }
 
     return $out;
 }
@@ -991,69 +1109,11 @@ sub make_argtable {
     my $setting = $root->{config};
     my $prefix = $setting->{name};
 
-    my ($r_def, $r_init) = make_argtable_declarations($prefix, 1, $setting);
-    my ($r_def2, $r_init2) = make_argtable_cl_groups_decls($prefix, @{$root->{cl_groups}});
-    push @$r_def, @$r_def2;
-    push @$r_init, @$r_init2;
-
     my $cl_groups_copy = make_arg_cl_groups_copy($prefix, $root);
 
     my $copy = make_argtable_copy2struct($prefix, $setting);
 
-    # Add configuration file settings
-    die "conffile_option not set\n" unless defined $root->{conffile_option};
-    my ($short_opt, $long_opt) = @{$root->{conffile_option}};
-    unshift @$r_def, "struct arg_file* ${prefix}_conffile;\n";
-    unshift @$r_init, <<EOF;
-        ${prefix}_conffile = arg_filen("$short_opt", "$long_opt", "<file>", 0, 1, "Specify configuration file"),
-EOF
-
-    my $out = <<EOF;
-
-#include "argtable3.h"
-#include <regex.h>
-
-@$r_def
-struct arg_end* ${prefix}_end;
-
-
-$copy
-
-int ${prefix}_cl_parse(int argc, char* argv[], struct ${prefix}_item* cfg) {
-        void* argtable[] = {
-@$r_init
-        ${prefix}_end = arg_end(10)
-    };
-    const char* errmsg;
-    int nerrors, cl_i;
-
-    nerrors = arg_parse(argc, argv, argtable);
-    if (nerrors) {
-        arg_print_errors(stdout, ${prefix}_end, "${prefix}"); 
-        arg_print_syntax(stdout, argtable, "\\n");
-        arg_print_glossary(stdout, argtable, "  %-25s\t%s\\n");
-        return 0;
-    }
-
-    ${prefix}_init(cfg);
-
-    if (${prefix}_conffile->count) {
-        if (!${prefix}_parse_file(${prefix}_conffile->filename[0], cfg, &errmsg)) {
-            fprintf(stderr, "%s\\n", errmsg);
-            exit(1);
-        }
-    }
-
-    ${prefix}_cl_c2s(0, cfg);
-
-$cl_groups_copy
-
-    return 1;
-}
-EOF
-
-
-    return $out;
+    return $copy;
 }
 
 
