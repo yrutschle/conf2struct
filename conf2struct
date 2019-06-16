@@ -58,7 +58,7 @@ sub scalar_type {
         'int' => 'int',
         'int64' => 'long long',
         'float' => 'double',
-        'string' => 'const char*',
+        'string' => 'char*',
     }->{$in};
     return $out;
 }
@@ -150,7 +150,7 @@ typedef union {
     int def_int;
     long long def_int64;
     double def_float;
-    const char* def_string;
+    char* def_string;
 } any_val;
 
 typedef struct {
@@ -162,6 +162,8 @@ typedef struct {
 static void settingcpy(config_type type, void* target, const config_setting_t* setting)
 {
     any_val val;
+    char* str;
+
     switch(type) {
     case CFG_BOOL:
         val.def_bool = config_setting_get_bool(setting);
@@ -184,7 +186,8 @@ static void settingcpy(config_type type, void* target, const config_setting_t* s
         break;
 
     case CFG_STRING:
-        val.def_string = config_setting_get_string(setting);
+        asprintf(&str, "%s", config_setting_get_string(setting));
+        val.def_string = str;
         *(char**)target = val.def_string;
         break;
 
@@ -199,6 +202,8 @@ static void settingcpy(config_type type, void* target, const config_setting_t* s
 static void clcpy(config_type type, void* target, const void* cl_arg)
 {
     any_val val;
+    char* str;
+
     switch(type) {
     case CFG_BOOL:
         val.def_bool = (*(struct arg_lit**)cl_arg)->count;
@@ -221,7 +226,8 @@ static void clcpy(config_type type, void* target, const void* cl_arg)
         break;
 
     case CFG_STRING:
-        val.def_string = (*(struct arg_str**)cl_arg)->sval[0];
+        asprintf(&str, "%s", (*(struct arg_str**)cl_arg)->sval[0]);
+        val.def_string = str;
         *(char**)target = val.def_string;
         break;
 
@@ -234,9 +240,10 @@ static void clcpy(config_type type, void* target, const void* cl_arg)
 /* Copy the value of a string argument to arbitary memory
 * location that must be large enough, converting on the way
 * (i.e. CFG_INT gets atoi() and so on) */
-static void stringcpy(config_type type, void* target, const char* from)
+static void stringcpy(config_type type, void* target, char* from)
 {
     any_val val;
+    char* str;
     
     switch(type) {
     case CFG_BOOL:
@@ -341,7 +348,7 @@ static void print_setting(config_type type, void* val)
 }
 
 /* Reads from libconfig object `cfg` into struct `setting` according to format `e` */
-static int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, const char** errmsg)
+static int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, char** errmsg)
 {
     lookup_fn lookup_fn;
     s_any_val val;
@@ -420,7 +427,7 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_entry*
 
 /* Read compound options described in `e`, from `cfg`, to `setting` */
 #define MAX_MATCH 10
-static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* e, const char** errmsg)
+static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* e, char** errmsg)
 {
     regex_t preg;
     int res, cnt;
@@ -479,7 +486,7 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
 }
 
 /* read config file `filename` into `c` */
-static int c2s_parse_file(const char* filename, config_t* c, const char**errmsg)
+static int c2s_parse_file(const char* filename, config_t* c, char**errmsg)
 {
     /* Read config file */
     config_init(c);
@@ -501,7 +508,7 @@ int ##name_cl_parse(int argc, char* argv[], struct eg_item* cfg)
 {
     int nerrors, res;
     config_t c;
-    const char* errmsg;
+    char* errmsg;
     config_setting_t* s;
     void* argtable[] = {
         ##r_init
@@ -1261,6 +1268,9 @@ $out
 EOF
         } elsif ($setting->{type} =~ /array/) {
             my $type = structtype $setting->{element_type};
+            my $assign = $type eq 'sval' ?
+                    "asprintf(&cfg->$name [i], \"%s\", $pname->$type [i]);"
+                    : "cfg->$name [i] = $pname->$type [i];";
             $out .= <<EOF;
             /* array */
             len = $pname->count;
@@ -1269,7 +1279,7 @@ EOF
                 cfg->${name}_len = len;
                 cfg->$name = malloc(len * sizeof(*cfg->$name));
                 for (i = 0; i < len; i++) {
-                    cfg->$name [i] = $pname->$type [i];
+                    $assign
                 }
             }
 EOF
@@ -1283,7 +1293,7 @@ EOF
             } elsif ($setting->{type} eq 'bool') {
                 $out .= "\t\tcfg->$name = $pname->count;\n";
             } elsif ($setting->{type} eq 'string') {
-                $out .= "\t\tcfg->$name = $pname->sval [arg_index];\n";
+                $out .= "\t\tasprintf(& cfg->$name, \"%s\", $pname->sval [arg_index]);\n";
             } else {
                 die "Unknown type $setting->{type}\n";
             }
