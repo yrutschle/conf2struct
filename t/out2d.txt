@@ -26,7 +26,7 @@ dgroup:
             gdmybool: 1
             gdmyint: 23
             gdmyint64: 12341234
-            gdmyfloat: 0.000000
+            gdmyfloat: 3.141000
             gdmystring: hello world
 list [3]:
     lmybool: 0

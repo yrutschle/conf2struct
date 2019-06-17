@@ -157,6 +157,37 @@ typedef struct {
     any_val val;
 } s_any_val;
 
+/* Copy an any_val to arbitrary memory location */
+static void any_valcpy(config_type type, void* target, any_val val)
+{
+    switch(type) {
+    case CFG_BOOL:
+        *(int*)target = val.def_bool;
+        break;
+
+    case CFG_INT:
+        *(int*)target = val.def_int;
+        break;
+
+    case CFG_INT64:
+        *(long long*)target = val.def_int64;
+        break;
+
+    case CFG_FLOAT:
+        *(double*)target = val.def_float;
+        break;
+
+    case CFG_STRING:
+        *(char**)target = val.def_string;
+        break;
+
+    default:
+        fprintf(stderr, "Unknown type specification %d\n", type);
+        exit(1);
+    }
+}
+
+
 /* Copy the value of a setting to an arbitrary memory that
 * must be large enough */
 static void settingcpy(config_type type, void* target, const config_setting_t* setting)
@@ -277,6 +308,7 @@ static void stringcpy(config_type type, void* target, char* from)
     }
 }
 
+
 struct config_entry {
     const char* name;
     int type;
@@ -293,15 +325,27 @@ struct config_entry {
     any_val default_val;
 };
 
+/* Element to describe the target of a compound element
+* element: which config entry is being changed
+* match: if >0, index in pmatch to set
+*        if 0, don't match but init with value
+* value: constant if not matching */
+struct compound_cl_target {
+    struct config_entry* element;
+    int match;
+    any_val value;
+};
+
 /* Element to describe one compound command line argument
  * An argument is string that gets matched against a regex,
  * then match-groups get evaluated to each entry[] */
 struct compound_cl_arg {
     const char* regex;
     struct arg_str** arg_cl; /* arg_str entry for this compound option */
-    struct config_entry* (*entry)[];
+    struct compound_cl_target* targets;
     const char* override;
 };
+
 
 EOF
 
@@ -430,10 +474,10 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_entry*
 static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* e, char** errmsg)
 {
     regex_t preg;
-    int res, cnt;
+    int res, pmatch_cnt;
     struct arg_str* arg_cl;
     regmatch_t pmatch[MAX_MATCH];
-    struct config_entry** target;
+    struct compound_cl_target* target;
 
     for (; e->regex; e++) {
         arg_cl = *e->arg_cl;
@@ -455,30 +499,36 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
             }
             TRACE_CMPD(("`%s' matched\n", arg_cl->sval[0]));
 
-            cnt = 1;
-            for (target = e->entry; *target; target++) {
-                TRACE_CMPD(("    match %d rm_so %d rm_eo %d type %d\n", 
-                            cnt, pmatch[cnt].rm_so, pmatch[cnt].rm_eo, (*target)->type ));
-                if (pmatch[cnt].rm_so == -1) {
-                    asprintf(errmsg, "--%s: %s did not match %s", 
-                        arg_cl->hdr.longopts, 
-                        arg_cl->sval[0],
-                        e->regex);
-                    return 0;
-                }
-                int len = pmatch[cnt].rm_eo - pmatch[cnt].rm_so;
-                char* str = calloc(len+1, 1);
-                memcpy(str, arg_cl->sval[0] + pmatch[cnt].rm_so, len);
-                stringcpy((*target)->type, (char*)(*target)->base_addr + (*target)->offset, str);
-                TRACE_CMPD(("setting %X+%d to : ", (*target)->base_addr, (*target)->offset));
-                print_setting( (*target)->type , (char*)(*target)->base_addr + (*target)->offset);
-                TRACE_CMPD(("\n"));
+            pmatch_cnt = 1;
+            for (target = e->targets; target->element; target++) {
+                struct config_entry* element = target->element;
+                if (target->match) {
+                    TRACE_CMPD(("    match %d rm_so %d rm_eo %d type %d\n", 
+                                pmatch_cnt, pmatch[pmatch_cnt].rm_so, pmatch[pmatch_cnt].rm_eo, element->type ));
+                    if (pmatch[pmatch_cnt].rm_so == -1) {
+                        asprintf(errmsg, "--%s: %s did not match %s", 
+                            arg_cl->hdr.longopts, 
+                            arg_cl->sval[0],
+                            e->regex);
+                        return 0;
+                    }
+                    int len = pmatch[pmatch_cnt].rm_eo - pmatch[pmatch_cnt].rm_so;
+                    char* str = calloc(len+1, 1);
+                    memcpy(str, arg_cl->sval[0] + pmatch[pmatch_cnt].rm_so, len);
+                    stringcpy(element->type, (char*)element->base_addr + element->offset, str);
+                    TRACE_CMPD(("setting %X+%d to : ", element->base_addr, element->offset));
+                    print_setting( element->type , (char*)element->base_addr + element->offset);
+                    TRACE_CMPD(("\n"));
 
-                /* str is temporary buffer for type conversion, except for strings which we
-                * need to keep around so don't free them */
-                if ((*target)->type != CFG_STRING) 
-                    free(str);
-                cnt++;
+                    /* str is temporary buffer for type conversion, except for strings which we
+                    * need to keep around so don't free them */
+                    if (element->type != CFG_STRING) 
+                        free(str);
+                    pmatch_cnt++;
+                } else { /* don't use matching, set constant */
+                    any_valcpy(element->type, (char*)element->base_addr + element->offset,
+                               target->value);
+                }
             }
         }
         TRACE_CMPD(("done %s\n", arg_cl->hdr.longopts));
@@ -799,21 +849,28 @@ EOF
         $structname =~ s/\./->/g;
 
         my $list_targets = "${name}_$s->{name}_targets";
-        my $entries = "static struct config_entry* $list_targets [] = {\n";
+        my $entries = "static struct compound_cl_target $list_targets [] = {\n";
         my $item = get_item($root, $s->{list});
+
         foreach my $t (@{$s->{targets}}) {
             my $index = 0;
             until ($item->{items}[$index]->{name} eq $t->{path}) {
                 $index++;
                 die "$s->{list}.$t->{path} not found\n" if not defined $item->{items}[$index];
             }
-            $entries .= "\t& table_${name}_${typename}[$index],\n";
+            my $match = ($t->{value} =~ /\$(\d+)/) ? "$1": 0;
+            my $value = $match ? 0 : "$t->{value}";
+            my $type = $item->{items}[$index]->{type};
+            $value = "\"$value\"" if $type eq 'string';
+            $value = ".value.def_$type = $value";
+
+            $entries .= "\t{ & table_${name}_${typename}[$index], $match, $value },\n";
         }
-        $entries .= "\tNULL\n};\n\n";
+        $entries .= "\t{ 0 }\n};\n\n";
 
         $out = "$entries$out";
 
-        my $entry = "& $list_targets";
+        my $entry = "$list_targets";
         my $arg_cl = "& ${name}_$s->{name}";
         my $regex = $s->{pattern};
         my $override = $s->{override} ? "\"$s->{override}\"" : "NULL";
