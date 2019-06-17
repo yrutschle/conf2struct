@@ -469,9 +469,54 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_entry*
     return 1;
 }
 
-/* Read compound options described in `e`, from `cfg`, to `setting` */
+
+/* Processes a list of targets within one element, setting
+* the values in the target setting 
+* arg: CL arg containing the target fields
+* clval: command line parameter
+* pmatch: regex match array into clval
+*/
+static int set_target_fields(struct compound_cl_arg* arg, const char* clval, regmatch_t* pmatch)
+{
+    int pmatch_cnt = 1;
+    struct compound_cl_target* target;
+
+    for (target = arg->targets; target->element; target++) {
+        struct config_entry* element = target->element;
+        if (target->match) {
+            TRACE_CMPD(("    match %d rm_so %d rm_eo %d type %d\n", 
+                        pmatch_cnt, pmatch[pmatch_cnt].rm_so, pmatch[pmatch_cnt].rm_eo, element->type ));
+            if (pmatch[pmatch_cnt].rm_so == -1) {
+                /* This should not happen as regexec() did
+                * match before, unless there is a
+                * discrepency between the regex and the
+                * number of backreferences */
+                return 0;
+            }
+            int len = pmatch[pmatch_cnt].rm_eo - pmatch[pmatch_cnt].rm_so;
+            char* str = calloc(len+1, 1);
+            memcpy(str, clval + pmatch[pmatch_cnt].rm_so, len);
+            stringcpy(element->type, (char*)element->base_addr + element->offset, str);
+            TRACE_CMPD(("setting %X+%d to : ", element->base_addr, element->offset));
+            print_setting(element->type , (char*)element->base_addr + element->offset);
+            TRACE_CMPD(("\n"));
+
+            /* str is temporary buffer for type conversion, except for strings which we
+            * need to keep around so don't free them */
+            if (element->type != CFG_STRING) 
+                free(str);
+            pmatch_cnt++;
+        } else { /* don't use matching, set constant */
+            any_valcpy(element->type, (char*)element->base_addr + element->offset,
+                        target->value);
+        }
+    }
+}
+
+
+/* Read compound options described in `arg`, from `cfg`, to `setting` */
 #define MAX_MATCH 10
-static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* e, char** errmsg)
+static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* arg, char** errmsg)
 {
     regex_t preg;
     int res, pmatch_cnt;
@@ -479,11 +524,11 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
     regmatch_t pmatch[MAX_MATCH];
     struct compound_cl_target* target;
 
-    for (; e->regex; e++) {
-        arg_cl = *e->arg_cl;
+    for (; arg->regex; arg++) {
+        arg_cl = *arg->arg_cl;
         TRACE_CMPD(("Compound %s occurs %d : ", arg_cl->hdr.longopts, arg_cl->count));
         if (arg_cl->count) {
-            res = regcomp(&preg, e->regex, REG_EXTENDED);
+            res = regcomp(&preg, arg->regex, REG_EXTENDED);
             if (res) {
                 int errlen = regerror(res, &preg, NULL, 0);
                 *errmsg = malloc(errlen);
@@ -494,42 +539,14 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
             if (res) {
                 asprintf(errmsg, "--%s %s: Illegal argument", 
                     arg_cl->hdr.longopts, 
-                     e->regex); 
+                     arg->regex); 
                 return 0;
             }
             TRACE_CMPD(("`%s' matched\n", arg_cl->sval[0]));
 
-            pmatch_cnt = 1;
-            for (target = e->targets; target->element; target++) {
-                struct config_entry* element = target->element;
-                if (target->match) {
-                    TRACE_CMPD(("    match %d rm_so %d rm_eo %d type %d\n", 
-                                pmatch_cnt, pmatch[pmatch_cnt].rm_so, pmatch[pmatch_cnt].rm_eo, element->type ));
-                    if (pmatch[pmatch_cnt].rm_so == -1) {
-                        asprintf(errmsg, "--%s: %s did not match %s", 
-                            arg_cl->hdr.longopts, 
-                            arg_cl->sval[0],
-                            e->regex);
-                        return 0;
-                    }
-                    int len = pmatch[pmatch_cnt].rm_eo - pmatch[pmatch_cnt].rm_so;
-                    char* str = calloc(len+1, 1);
-                    memcpy(str, arg_cl->sval[0] + pmatch[pmatch_cnt].rm_so, len);
-                    stringcpy(element->type, (char*)element->base_addr + element->offset, str);
-                    TRACE_CMPD(("setting %X+%d to : ", element->base_addr, element->offset));
-                    print_setting( element->type , (char*)element->base_addr + element->offset);
-                    TRACE_CMPD(("\n"));
+            if (!set_target_fields(arg, arg_cl->sval[0], pmatch))
+                return 0;
 
-                    /* str is temporary buffer for type conversion, except for strings which we
-                    * need to keep around so don't free them */
-                    if (element->type != CFG_STRING) 
-                        free(str);
-                    pmatch_cnt++;
-                } else { /* don't use matching, set constant */
-                    any_valcpy(element->type, (char*)element->base_addr + element->offset,
-                               target->value);
-                }
-            }
         }
         TRACE_CMPD(("done %s\n", arg_cl->hdr.longopts));
     }
