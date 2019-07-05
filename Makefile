@@ -9,7 +9,7 @@ checker: confcheck.o
 	gcc -o confcheck confcheck.o -lconfig
 
 
-install: all
+install:
 	install -c conf2struct $(bindir)/conf2struct
 	install -c confcheck $(bindir)/confcheck
 
