@@ -10,6 +10,7 @@ checker: confcheck.o
 
 
 install: all
+	mkdir -p $(DESTDIR)/$(bindir)
 	install -c conf2struct $(bindir)/conf2struct
 	install -c confcheck $(bindir)/confcheck
 
