@@ -10,11 +10,11 @@ checker: confcheck.o
 
 
 install: all
-	install -c conf2struct $(bindir)/conf2struct
-	install -c confcheck $(bindir)/confcheck
+	install -c conf2struct $(DESTDIR)$(bindir)/conf2struct
+	install -c confcheck $(DESTDIR)$(bindir)/confcheck
 
 uninstall:
-	rm -rf $(bindir)/conf2struct $(bindir)/confcheck
+	rm -rf $(DESTDIR)$(bindir)/conf2struct $(DESTDIR)$(bindir)/confcheck
 	
 EG_OBJ=example.o parser.o argtable3.o
 example: $(EG_OBJ)
