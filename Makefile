@@ -9,7 +9,8 @@ checker: confcheck.o
 	$(CC) $(CFLAGS) -o confcheck confcheck.o -lconfig
 
 
-install: all
+
+install:
 	install -c conf2struct $(DESTDIR)$(bindir)/conf2struct
 	install -c confcheck $(DESTDIR)$(bindir)/confcheck
 
