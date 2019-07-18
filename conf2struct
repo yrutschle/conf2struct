@@ -532,19 +532,44 @@ int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
     list_len++;
     list_base = realloc(list_base, list_len * elem_size);
     *(size_t*)(desc->base_addr + desc->offset_len) = list_len;
-    *(void*)(desc->base_addr + desc->offset) = list_base;
+/*    *(void*)(desc->base_addr + desc->offset) = list_base;
+*    
 
     if (!set_target_fields(arg, arg->arg_cl, pmatch)) {
         return 0;
     }
+*/
 
 }
 
-/* Read compound options described in `arg`, from `cfg`, to `setting` */
+/* TODO: pass pmatch size as parameter or something */
 #define MAX_MATCH 10
+
+/* Regex fiddling: uses info in arg to fill pmatch */
+int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, char** errmsg)
+{
+    struct arg_str* arg_cl = *arg->arg_cl;
+    regex_t preg;
+    int res = regcomp(&preg, arg->regex, REG_EXTENDED);
+    if (res) {
+        int errlen = regerror(res, &preg, NULL, 0);
+        *errmsg = malloc(errlen);
+        regerror(res, &preg, *errmsg, errlen);
+        return 0;
+    }
+    res = regexec(&preg, arg_cl->sval[0], MAX_MATCH, &pmatch[0], 0);
+    if (res) {
+        asprintf(errmsg, "--%s %s: Illegal argument", 
+        arg_cl->hdr.longopts, 
+        arg->regex); 
+        return 0;
+    }
+    return 1;
+}
+
+/* Read compound options described in `arg`, from `cfg`, to `setting` */
 static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* arg, char** errmsg)
 {
-    regex_t preg;
     int res, pmatch_cnt;
     struct arg_str* arg_cl;
     regmatch_t pmatch[MAX_MATCH];
@@ -554,20 +579,8 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
         arg_cl = *arg->arg_cl;
         TRACE_CMPD(("Compound %s occurs %d : ", arg_cl->hdr.longopts, arg_cl->count));
         if (arg_cl->count) {
-            res = regcomp(&preg, arg->regex, REG_EXTENDED);
-            if (res) {
-                int errlen = regerror(res, &preg, NULL, 0);
-                *errmsg = malloc(errlen);
-                regerror(res, &preg, *errmsg, errlen);
+            if (!regcompmatch(&pmatch[0], arg, errmsg))
                 return 0;
-            }
-            res = regexec(&preg, arg_cl->sval[0], MAX_MATCH, &pmatch[0], 0);
-            if (res) {
-                asprintf(errmsg, "--%s %s: Illegal argument", 
-                    arg_cl->hdr.longopts, 
-                     arg->regex); 
-                return 0;
-            }
             TRACE_CMPD(("`%s' matched\n", arg_cl->sval[0]));
 
             /* In a list, find the end or the element to override */
