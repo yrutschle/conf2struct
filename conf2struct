@@ -105,10 +105,9 @@ sub scalar_type_print {
 # Turn libconfig setting names to C struct names
 sub cfgname2c {
     my ($name) = @_;
-    $name =~ s/-/_/g;
+    $name =~ s/[-.]/_/g;
     return $name;
 }
-
 
 ################################################################################
 # C code included in output
@@ -338,12 +337,15 @@ struct compound_cl_target {
 
 /* Element to describe one compound command line argument
  * An argument is string that gets matched against a regex,
- * then match-groups get evaluated to each entry[] */
+ * then match-groups get evaluated to each targets[].
+ * For lists, base_entry points to the config_setting so we
+ * can append to it */
 struct compound_cl_arg {
     const char* regex;
     struct arg_str** arg_cl; /* arg_str entry for this compound option */
+    struct config_entry* base_entry;
     struct compound_cl_target* targets;
-    const char* override;
+    struct config_entry* override;
 };
 
 
@@ -511,8 +513,32 @@ static int set_target_fields(struct compound_cl_arg* arg, const char* clval, reg
                         target->value);
         }
     }
+
 }
 
+int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
+{
+    struct config_entry* desc = arg->base_entry;
+    void* list_base = desc->base_addr + desc->offset;
+    size_t list_len = *(size_t*)(desc->base_addr + desc->offset_len);
+    size_t elem_size = desc->size;
+    int i;
+
+    printf("arg_to_list base %X len %d size %d\n", list_base, list_len, elem_size);
+    for (i = 0; i < list_len; i++) {
+    }
+
+    /* override not found or no override, append element */
+    list_len++;
+    list_base = realloc(list_base, list_len * elem_size);
+    *(size_t*)(desc->base_addr + desc->offset_len) = list_len;
+    *(void*)(desc->base_addr + desc->offset) = list_base;
+
+    if (!set_target_fields(arg, arg->arg_cl, pmatch)) {
+        return 0;
+    }
+
+}
 
 /* Read compound options described in `arg`, from `cfg`, to `setting` */
 #define MAX_MATCH 10
@@ -543,6 +569,15 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
                 return 0;
             }
             TRACE_CMPD(("`%s' matched\n", arg_cl->sval[0]));
+
+            /* In a list, find the end or the element to override */
+            if (arg->base_entry->type == CFG_LIST) {
+                if (!add_arg_to_list(arg, pmatch)) {
+                    return 0;
+                }
+            }
+
+            /* Semantics for CFG_ARRAY TBD */
 
             if (!set_target_fields(arg, arg_cl->sval[0], pmatch))
                 return 0;
@@ -848,6 +883,46 @@ EOF
     return $out;
 }
 
+# Return an entry index inside a group based on name
+sub search_name_index {
+    my ($item, $name) = @_;
+
+    my $i = 0;
+    until ($item->[$i]->{name} eq $name) {
+        print "$i: $item->[$i]->{name} vs $name\n";
+        $i++;
+        if (not defined $item->[$i]) { 
+            warn "$name not found\n" ; 
+            return ;
+        }
+    }
+    print "$i: $item->[$i]->{name} vs $name\n";
+    return $i;
+}
+
+# Creates a pointer to the C struct that hosts schema element $s
+# $name: basename of the config
+# $root: root of the schema
+# $s: element to find
+# returns e.g. " & table_eg[5] ": $s is the 5th element in that table
+sub make_baseref {
+    my ($name, $root, $s) = @_;
+    my $typename = cfgname2c $s->{list};
+    my $base_entry = "table_${name}_${typename}";
+    $base_entry =~ s/_[a-zA-Z0-9]+?$//;
+    print "search base\n";
+    my $be = $base_entry;
+    $be =~ s/_/./g;
+    $be =~ s/^\w+?\.//;
+    $be =~ s/^\w+?\.//;
+    $be = "" if $be eq $root->{config}->{name};
+    my $it = get_item($root, $be);
+    my $leaf_name = $s->{list};
+    $leaf_name =~ s/^.*\.//;
+    $base_entry .=  "[".  search_name_index($it->{items}, $leaf_name). "]";
+    return "& $base_entry";
+}
+
 ################################################################################
 # Generate table for compound option processing
 sub make_compound_table {
@@ -860,8 +935,7 @@ EOF
     foreach my $s (@{$root->{cl_groups}}) {
         my $argname = $s->{name};
 
-        my $typename = $s->{list};
-        $typename =~ s/\./_/g;
+        my $typename = cfgname2c $s->{list};
         my $structname = $s->{list};
         $structname =~ s/\./->/g;
 
@@ -870,11 +944,7 @@ EOF
         my $item = get_item($root, $s->{list});
 
         foreach my $t (@{$s->{targets}}) {
-            my $index = 0;
-            until ($item->{items}[$index]->{name} eq $t->{path}) {
-                $index++;
-                die "$s->{list}.$t->{path} not found\n" if not defined $item->{items}[$index];
-            }
+            my $index = search_name_index($item->{items}, $t->{path});
             my $match = ($t->{value} =~ /\$(\d+)/) ? "$1": 0;
             my $value = $match ? 0 : "$t->{value}";
             my $type = $item->{items}[$index]->{type};
@@ -887,17 +957,26 @@ EOF
 
         $out = "$entries$out";
 
-        my $entry = "$list_targets";
+        my $targets = "$list_targets";
         my $arg_cl = "& ${name}_$s->{name}";
         my $regex = $s->{pattern};
-        my $override = $s->{override} ? "\"$s->{override}\"" : "NULL";
+
+        my $base_entry = make_baseref($name, $root, $s);
+
+        # TODO: Override only works on groups, reject it otherwise
+        my $override = 
+            $s->{override} ? 
+                "& table_${name}_$item->{name} [".
+                    search_name_index($item->{items}, $s->{override})."]" : 
+                "NULL";
 
         $out .= <<EOF;
         {   /* arg: $argname */
-            /* regex */         "$regex",
-            /* arg_cl */        $arg_cl,
-            /* entry */         $entry,
-            /* override */      $override,
+            .regex =           "$regex",
+            .arg_cl =          $arg_cl,
+            .base_entry =      $base_entry,
+            .targets =         $targets,
+            .override =        $override,
         },
 
 EOF
@@ -1162,6 +1241,7 @@ sub make_argtable_cl_groups_decls {
 sub get_item {
     my ($root, $path) = @_;
     my $e = $root->{config};
+    print "looking for item `$path'\n";
     my @p = split /\./, $path;
     foreach my $p (@p) {
         $e = (grep { $_->{name} eq $p } @{$e->{items}})[0];
@@ -1181,8 +1261,7 @@ sub make_arg_cl_groups_copy {
         # groups, e.g. "application.books". It is turned to
         # $typename, full name in C types("application_books")
         # and $structname, path ("application->books")
-        my $typename = $g->{list};
-        $typename =~ s/\./_/g;
+        my $typename = cfgname2c $g->{list};
         my $structname = $g->{list};
         $structname =~ s/\./->/g;
         my $st_name = "struct ${prefix}_${typename}_item";
