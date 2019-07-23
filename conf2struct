@@ -313,7 +313,7 @@ struct config_entry {
     int type;
     struct config_entry* sub_group; /* Table for compound types (list and group) */
     void* arg_cl; /* command-line argument for this setting */
-    void* base_addr; /* Base of the structure (filled at runtime) */
+    void* base_addr; /* Base of the structure (filled at runtime). Probably not useable for list elements */
     size_t offset;  /* Offset of setting in the structure */
     size_t offset_len; /* Offset of *_len field, for arrays and lists */
     size_t offset_present; /* offset of *_is_present field, for optional settings */
@@ -474,11 +474,12 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_entry*
 
 /* Processes a list of targets within one element, setting
 * the values in the target setting 
+* target: where to put the data
 * arg: CL arg containing the target fields
 * clval: command line parameter
 * pmatch: regex match array into clval
 */
-static int set_target_fields(struct compound_cl_arg* arg, const char* clval, regmatch_t* pmatch)
+static int set_target_fields(void* target_addr, struct compound_cl_arg* arg, const char* clval, regmatch_t* pmatch)
 {
     int pmatch_cnt = 1;
     struct compound_cl_target* target;
@@ -498,9 +499,9 @@ static int set_target_fields(struct compound_cl_arg* arg, const char* clval, reg
             int len = pmatch[pmatch_cnt].rm_eo - pmatch[pmatch_cnt].rm_so;
             char* str = calloc(len+1, 1);
             memcpy(str, clval + pmatch[pmatch_cnt].rm_so, len);
-            stringcpy(element->type, (char*)element->base_addr + element->offset, str);
-            TRACE_CMPD(("setting %X+%d to : ", element->base_addr, element->offset));
-            print_setting(element->type , (char*)element->base_addr + element->offset);
+            stringcpy(element->type, (char*)target_addr + element->offset, str);
+            TRACE_CMPD(("setting %X+%d to : ", target_addr , element->offset));
+            print_setting(element->type , (char*)target_addr + element->offset);
             TRACE_CMPD(("\n"));
 
             /* str is temporary buffer for type conversion, except for strings which we
@@ -509,7 +510,7 @@ static int set_target_fields(struct compound_cl_arg* arg, const char* clval, reg
                 free(str);
             pmatch_cnt++;
         } else { /* don't use matching, set constant */
-            any_valcpy(element->type, (char*)element->base_addr + element->offset,
+            any_valcpy(element->type, (char*)target_addr + element->offset,
                         target->value);
         }
     }
@@ -519,26 +520,21 @@ static int set_target_fields(struct compound_cl_arg* arg, const char* clval, reg
 int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
 {
     struct config_entry* desc = arg->base_entry;
-    void* list_base = desc->base_addr + desc->offset;
+    void* list_base = *(void**)(desc->base_addr + desc->offset);
     size_t list_len = *(size_t*)(desc->base_addr + desc->offset_len);
     size_t elem_size = desc->size;
     int i;
-
-    printf("arg_to_list base %X len %d size %d\n", list_base, list_len, elem_size);
-    for (i = 0; i < list_len; i++) {
-    }
 
     /* override not found or no override, append element */
     list_len++;
     list_base = realloc(list_base, list_len * elem_size);
     *(size_t*)(desc->base_addr + desc->offset_len) = list_len;
-/*    *(void*)(desc->base_addr + desc->offset) = list_base;
-*    
+    *(void**)(desc->base_addr + desc->offset) = list_base;
 
-    if (!set_target_fields(arg, arg->arg_cl, pmatch)) {
+    struct arg_str* arg_cl = *arg->arg_cl;
+    if (!set_target_fields((char*)list_base + (list_len - 1) * elem_size, arg, arg_cl->sval[0], pmatch)) {
         return 0;
     }
-*/
 
 }
 
@@ -592,7 +588,12 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
 
             /* Semantics for CFG_ARRAY TBD */
 
-            if (!set_target_fields(arg, arg_cl->sval[0], pmatch))
+            if (!set_target_fields(
+                        /* base_addr is the same for all elements in the group */
+                        arg->targets[0].element->base_addr, 
+                        arg, 
+                        arg_cl->sval[0], 
+                        pmatch))
                 return 0;
 
         }
@@ -902,14 +903,12 @@ sub search_name_index {
 
     my $i = 0;
     until ($item->[$i]->{name} eq $name) {
-        print "$i: $item->[$i]->{name} vs $name\n";
         $i++;
         if (not defined $item->[$i]) { 
             warn "$name not found\n" ; 
             return ;
         }
     }
-    print "$i: $item->[$i]->{name} vs $name\n";
     return $i;
 }
 
@@ -923,7 +922,6 @@ sub make_baseref {
     my $typename = cfgname2c $s->{list};
     my $base_entry = "table_${name}_${typename}";
     $base_entry =~ s/_[a-zA-Z0-9]+?$//;
-    print "search base\n";
     my $be = $base_entry;
     $be =~ s/_/./g;
     $be =~ s/^\w+?\.//;
@@ -1254,7 +1252,6 @@ sub make_argtable_cl_groups_decls {
 sub get_item {
     my ($root, $path) = @_;
     my $e = $root->{config};
-    print "looking for item `$path'\n";
     my @p = split /\./, $path;
     foreach my $p (@p) {
         $e = (grep { $_->{name} eq $p } @{$e->{items}})[0];
