@@ -152,10 +152,6 @@ typedef union {
     char* def_string;
 } any_val;
 
-typedef struct {
-    any_val val;
-} s_any_val;
-
 /* Copy an any_val to arbitrary memory location */
 static void any_valcpy(config_type type, void* target, any_val val)
 {
@@ -397,7 +393,6 @@ static void print_setting(config_type type, void* val)
 static int read_block(config_setting_t* cfg, void* setting, struct config_entry* e, char** errmsg)
 {
     lookup_fn lookup_fn;
-    s_any_val val;
     config_setting_t* s;
     void* block;
     size_t len;
