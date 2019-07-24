@@ -530,7 +530,7 @@ int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
     if (!set_target_fields((char*)list_base + (list_len - 1) * elem_size, arg, arg_cl->sval[0], pmatch)) {
         return 0;
     }
-
+    return 1;
 }
 
 /* TODO: pass pmatch size as parameter or something */
@@ -574,23 +574,29 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
                 return 0;
             TRACE_CMPD(("`%s' matched\n", arg_cl->sval[0]));
 
-            /* In a list, find the end or the element to override */
-            if (arg->base_entry->type == CFG_LIST) {
+            switch (arg->base_entry->type) {
+            case CFG_LIST:
+                /* In a list, find the end or the element to override */
                 if (!add_arg_to_list(arg, pmatch)) {
                     return 0;
                 }
-            }
+                break;
 
             /* Semantics for CFG_ARRAY TBD */
 
-            if (!set_target_fields(
-                        /* base_addr is the same for all elements in the group */
-                        arg->targets[0].element->base_addr, 
-                        arg, 
-                        arg_cl->sval[0], 
-                        pmatch))
-                return 0;
+            case CFG_GROUP:
+                if (!set_target_fields(
+                            /* base_addr is the same for all elements in the group */
+                            arg->targets[0].element->base_addr, 
+                            arg, 
+                            arg_cl->sval[0], 
+                            pmatch))
+                    return 0;
 
+            default:
+                TRACE_CMPD(("error, compound on type %d\n", arg->base_entry->type));
+                break;
+            }
         }
         TRACE_CMPD(("done %s\n", arg_cl->hdr.longopts));
     }
