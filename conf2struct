@@ -913,7 +913,7 @@ sub search_name_index {
     return $i;
 }
 
-# Creates a pointer to the C struct that hosts schema element $s
+# Creates a pointer to the C descriptor that hosts schema element $s
 # $name: basename of the config
 # $root: root of the schema
 # $s: element to find
@@ -931,8 +931,7 @@ sub make_baseref {
     my $it = get_item($root, $be);
     my $leaf_name = $s->{list};
     $leaf_name =~ s/^.*\.//;
-    $base_entry .=  "[".  search_name_index($it->{items}, $leaf_name). "]";
-    return "& $base_entry";
+    return "& $base_entry [". search_name_index($it->{items}, $leaf_name). "]";
 }
 
 ################################################################################
@@ -978,7 +977,7 @@ EOF
         # TODO: Override only works on groups, reject it otherwise
         my $override = 
             $s->{override} ? 
-                "& table_${name}_$item->{name} [".
+                "& table_${name}_$typename [".
                     search_name_index($item->{items}, $s->{override})."]" : 
                 "NULL";
 

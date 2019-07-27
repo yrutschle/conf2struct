@@ -88,6 +88,7 @@ cl_groups: (
     { name: "group1"; pattern: "([[:digit:]]),([[:digit:]]+),(.*)";
       argdesc: "<bool>,<int>,<str>";   # in deep group
       list: "dgroup.dlvl2.dlvl3";
+      override: "gdmystring";
       targets: (
                 { path: "gdmybool"; value: "$1" },
                 { path: "gdmyint"; value: "$2" },
