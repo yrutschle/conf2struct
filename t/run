@@ -125,6 +125,10 @@ my @tests = (
     },
 );
 
+# Number tests
+my $i = 1;
+map { $_->{'index'} = $i++ } @tests;
+
 # Only keep selected tests
 @tests = @tests[ map { $_ - 1 } @ARGV ] if @ARGV;
 
@@ -141,11 +145,7 @@ $_->{'index'}, $_->{'desc'};
 .
 if ($list_tests) {
     format_name STDOUT "test_list";
-    my $i = 1;
-    map { $_->{'index'} = $i++ } @tests;
     format_top_name STDOUT "test_list_top";
-    $i = 1;
-    map { $_->{'index'} = $i++ } @tests;
     map { write; } @tests;
     exit 0;
 }
@@ -178,21 +178,24 @@ foreach my $test (@tests) {
     my $opts = "";
     $opts .= '-MDevel::Cover="-silent,on,-db,../cover_db"' if $coverage;
     my $make = "SCHEMA=$test->{schema} PARSER=$test->{parser} PERLOPTS=$opts make";
-    my $res = system($make);
-    ok($res == 0, "$test->{desc} makes correctly");
-    if ($res) {
+    my $res1 = system($make);
+    ok($res1 == 0, "$test->{desc} makes correctly");
+    if ($res1) {
         diag("cmd: `$make`");
     }
 
     my $cmd = "stdbuf -o0 -e0 ./parser $test->{cmd} > $test->{out} 2>&1";
-    $res = system($cmd);
-    ok($res, "$test->{desc} runs");
+    my $res2 = system($cmd);
+    ok($res2, "$test->{desc} runs");
 
-    $res = system("diff -u ../$test->{out} $test->{out}");
-    ok($res == 0, "$test->{desc} returns correctly");
-    if ($res) {
+    my $res3 = system("diff -u ../$test->{out} $test->{out}");
+    ok($res3 == 0, "$test->{desc} returns correctly");
+    if ($res3) {
         diag("cmd: `$cmd`");
     }
+
+    print "$res1 $res2 $res3\n";
+    push @results, [$test->{index}, $test->{desc}, ($res1 or !$res2 or $res3)];
 
     `lcov --directory . --capture --output-file sslh_cov.info`;
     `genhtml sslh_cov.info`;
@@ -224,5 +227,6 @@ $_->[0], $_->[1], $_->[2] ? "NOK" : "OK"
 
 format_name STDOUT "test_results";
 format_top_name STDOUT "test_results_top";
+
 map { write; } @results;
 
