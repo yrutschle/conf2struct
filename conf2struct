@@ -411,6 +411,7 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_entry*
         TRACE_READ(("reading %s%s%s: ", e->optional ? "optional " : "", e->mandatory ? "mandatory " : "",  e->name));
         e->base_addr = setting;
         memset((char*)setting + e->offset, e->size, 0);
+        if (cfg) {
         if (s = config_setting_lookup(cfg, e->name)) {
             switch (e->type) {
             case CFG_LIST:
@@ -460,6 +461,7 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_entry*
             }
             TRACE_READ((", setting to ")); print_setting(e->type, &e->default_val); TRACE_READ(("\n"));
             memcpy(((char*)setting) + e->offset, &e->default_val, e->size);
+        }
         }
         /* Then, override from command line */ 
         if (e->arg_cl) {
@@ -557,7 +559,7 @@ int override_on_str(struct compound_cl_arg* arg, const char* str, regmatch_t* pm
 }
 
 /* Goes over a list and override group if needed */
-int override_elem(struct compound_cl_arg* arg, regmatch_t* pmatch) 
+int override_elem(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch) 
 {
     char* str;
     int allocated = 0;
@@ -565,7 +567,7 @@ int override_elem(struct compound_cl_arg* arg, regmatch_t* pmatch)
 
     if (arg->override_matchindex) {
         struct arg_str* arg_cl = *arg->arg_cl;
-        pmatchcpy(&str, arg_cl->sval[0], &pmatch[arg->override_matchindex]);
+        pmatchcpy(&str, arg_cl->sval[arg_index], &pmatch[arg->override_matchindex]);
         allocated = 1;
     } else {
         str = arg->override_const;
@@ -580,7 +582,7 @@ int override_elem(struct compound_cl_arg* arg, regmatch_t* pmatch)
 
 /* Add an argument to a list, overriding if required or
 * appending otherwise */
-int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
+int add_arg_to_list(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch)
 {
     struct config_entry* desc = arg->base_entry;
     void* list_base = *(void**)(desc->base_addr + desc->offset);
@@ -589,7 +591,7 @@ int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
 
     /* are we overriding an existing group? */
     if (arg->override_desc)
-        if (override_elem(arg, pmatch))
+        if (override_elem(arg, arg_index, pmatch))
             return 1;
 
     /* override not found or no override, append element */
@@ -599,7 +601,7 @@ int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
     *(void**)(desc->base_addr + desc->offset) = list_base;
 
     struct arg_str* arg_cl = *arg->arg_cl;
-    if (!set_target_fields((char*)list_base + (list_len - 1) * elem_size, arg, arg_cl->sval[0], pmatch)) {
+    if (!set_target_fields((char*)list_base + (list_len - 1) * elem_size, arg, arg_cl->sval[arg_index], pmatch)) {
         return 0;
     }
     return 1;
@@ -608,8 +610,11 @@ int add_arg_to_list(struct compound_cl_arg* arg, regmatch_t* pmatch)
 /* TODO: pass pmatch size as parameter or something */
 #define MAX_MATCH 10
 
-/* Regex fiddling: uses info in arg to fill pmatch */
-int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, char** errmsg)
+/* Regex fiddling: uses info in arg to fill pmatch
+* arg: description of the command line argument
+* arg_index: occurence of this argument on the command line
+*/
+int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, int arg_index, char** errmsg)
 {
     struct arg_str* arg_cl = *arg->arg_cl;
     regex_t preg;
@@ -620,7 +625,7 @@ int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, char** errmsg)
         regerror(res, &preg, *errmsg, errlen);
         return 0;
     }
-    res = regexec(&preg, arg_cl->sval[0], MAX_MATCH, &pmatch[0], 0);
+    res = regexec(&preg, arg_cl->sval[arg_index], MAX_MATCH, &pmatch[0], 0);
     if (res) {
         asprintf(errmsg, "--%s %s: Illegal argument", 
         arg_cl->hdr.longopts, 
@@ -633,7 +638,7 @@ int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, char** errmsg)
 /* Read compound options described in `arg`, from `cfg`, to `setting` */
 static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* arg, char** errmsg)
 {
-    int res, pmatch_cnt;
+    int res, pmatch_cnt, arg_i;
     struct arg_str* arg_cl;
     regmatch_t pmatch[MAX_MATCH];
     struct compound_cl_target* target;
@@ -641,15 +646,15 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
     for (; arg->regex; arg++) {
         arg_cl = *arg->arg_cl;
         TRACE_CMPD(("Compound %s occurs %d : ", arg_cl->hdr.longopts, arg_cl->count));
-        if (arg_cl->count) {
-            if (!regcompmatch(&pmatch[0], arg, errmsg))
+        for (arg_i = 0; arg_i < arg_cl->count; arg_i++) {
+            if (!regcompmatch(&pmatch[0], arg, arg_i, errmsg))
                 return 0;
-            TRACE_CMPD(("`%s' matched\n", arg_cl->sval[0]));
+            TRACE_CMPD(("`%s' matched\n", arg_cl->sval[arg_i]));
 
             switch (arg->base_entry->type) {
             case CFG_LIST:
                 /* In a list, find the end or the element to override */
-                if (!add_arg_to_list(arg, pmatch)) {
+                if (!add_arg_to_list(arg, arg_i, pmatch)) {
                     return 0;
                 }
                 break;
@@ -661,7 +666,7 @@ static int read_compounds(config_setting_t* cfg, void* setting, struct compound_
                             /* base_addr is the same for all elements in the group */
                             arg->targets[0].element->base_addr, 
                             arg, 
-                            arg_cl->sval[0], 
+                            arg_cl->sval[arg_i], 
                             pmatch))
                     return 0;
 

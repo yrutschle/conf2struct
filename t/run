@@ -89,7 +89,15 @@ my @tests = (
         parser => 'parser.c',
         cmd => '-F in2c.data --list_edit 1,23,"hello world"',
         out => 'out2e.txt',
-        desc => "Compound option for list, append",
+        desc => "Compound option for list, append one",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data --list_edit 1,23,"hello world" --list_edit 2,42,"bye" --list_edit 3,6,"cruel world"',
+        out => 'out2ea.txt',
+        desc => "Compound option for list, append several",
     },
     {
         schema => 'in2.sch',
@@ -98,6 +106,14 @@ my @tests = (
         cmd => '-F in2c.data --list_edit 1,23,second',
         out => 'out2f.txt',
         desc => "Compound option for list, replace",
+    },
+    {
+        schema => 'in2.sch',
+        data => 'in2c.data',
+        parser => 'parser.c',
+        cmd => '-F in2c.data --list_edit 1,23,second --list_edit 2,42,"bye"',
+        out => 'out2fa.txt',
+        desc => "Compound option for list, replace and add",
     },
     {
         schema => 'in2.sch',
