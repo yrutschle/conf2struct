@@ -432,56 +432,56 @@ static int read_block(config_setting_t* cfg, void* setting, struct config_desc *
         e->base_addr = setting;
         memset((char*)setting + e->offset, e->size, 0);
         if (cfg) {
-        if (s = config_setting_lookup(cfg, e->name)) {
-            switch (e->type) {
-            case CFG_LIST:
-            case CFG_ARRAY:
-                len = config_setting_length(s);
-                block = malloc(e->size * len);
-                for (int i = 0; i < len; i++) {
-                    config_setting_t* elem = config_setting_get_elem(s, i);
-                    if (e->type == CFG_LIST) {
-                        if (!read_block(elem, (char*)block + e->size * i, e->sub_group, errmsg))
-                            return 0;
-                    } else { /* CFG_ARRAY */
-                        settingcpy(e->array_type, (char*)block + e->size * i, elem);
-                        TRACE_READ(("[%d] = ", i));
-                        print_setting(e->array_type, (char*)block + e->size *i); TRACE_READ(("\n"));
+            if (s = config_setting_lookup(cfg, e->name)) {
+                switch (e->type) {
+                case CFG_LIST:
+                case CFG_ARRAY:
+                    len = config_setting_length(s);
+                    block = malloc(e->size * len);
+                    for (int i = 0; i < len; i++) {
+                        config_setting_t* elem = config_setting_get_elem(s, i);
+                        if (e->type == CFG_LIST) {
+                            if (!read_block(elem, (char*)block + e->size * i, e->sub_group, errmsg))
+                                return 0;
+                        } else { /* CFG_ARRAY */
+                            settingcpy(e->array_type, (char*)block + e->size * i, elem);
+                            TRACE_READ(("[%d] = ", i));
+                            print_setting(e->array_type, (char*)block + e->size *i); TRACE_READ(("\n"));
+                        }
                     }
+                    *(size_t*)(((char*)setting) + e->offset_len) = len;
+                    *(void**)(((char*)setting) + e->offset) = block;
+                    break;
+
+                case CFG_GROUP:
+                    block = malloc(e->size);
+                    if (!read_block(s, block, e->sub_group , errmsg)) return 0;
+                    *(void**)(((char*)setting) + e->offset) = block;
+                    break;
+
+
+                default:
+                    /* First, lookup in config file */
+                    lookup_fn = lookup_fns[e->type];
+                    if (lookup_fn(cfg, e->name, ((char*)setting) + e->offset) == CONFIG_FALSE) {
+                        asprintf(errmsg, "Parsing of option \"%s\" failed", e->name);
+                        return 0;
+                    }
+                    print_setting(e->type, (((char*)setting) + e->offset)); TRACE_READ(("\n"));
                 }
-                *(size_t*)(((char*)setting) + e->offset_len) = len;
-                *(void**)(((char*)setting) + e->offset) = block;
-                break;
-
-            case CFG_GROUP:
-                block = malloc(e->size);
-                if (!read_block(s, block, e->sub_group , errmsg)) return 0;
-                *(void**)(((char*)setting) + e->offset) = block;
-                break;
-
-
-            default:
-                /* First, lookup in config file */
-                lookup_fn = lookup_fns[e->type];
-                if (lookup_fn(cfg, e->name, ((char*)setting) + e->offset) == CONFIG_FALSE) {
-                    asprintf(errmsg, "Parsing of option \"%s\" failed", e->name);
+                if (e->optional) { /* set field _is_present = 1 */
+                    TRACE_READ(("set optional at offset: %X sizeof(int)=%d\n",  e->offset,sizeof(int)));
+                    *(int*)((char*)setting + e->offset_present) = 1;
+                }
+            } else {
+                TRACE_READ(("not found "));
+                if (e->mandatory && !e->optional) {
+                    asprintf(errmsg, "Mandatory option \"%s\" not found", e->name);
                     return 0;
                 }
-                print_setting(e->type, (((char*)setting) + e->offset)); TRACE_READ(("\n"));
+                TRACE_READ((", setting to ")); print_setting(e->type, &e->default_val); TRACE_READ(("\n"));
+                memcpy(((char*)setting) + e->offset, &e->default_val, e->size);
             }
-            if (e->optional) { /* set field _is_present = 1 */
-                TRACE_READ(("set optional at offset: %X sizeof(int)=%d\n",  e->offset,sizeof(int)));
-                *(int*)((char*)setting + e->offset_present) = 1;
-            }
-        } else {
-            TRACE_READ(("not found "));
-            if (e->mandatory && !e->optional) {
-                asprintf(errmsg, "Mandatory option \"%s\" not found", e->name);
-                return 0;
-            }
-            TRACE_READ((", setting to ")); print_setting(e->type, &e->default_val); TRACE_READ(("\n"));
-            memcpy(((char*)setting) + e->offset, &e->default_val, e->size);
-        }
         }
         /* Then, override from command line */ 
         if (e->arg_cl) {
