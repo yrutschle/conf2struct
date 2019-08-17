@@ -1,8 +1,4 @@
-mybool: 0
-myint: 0
-myint64: 0
-myfloat: 0.000000
-mystring: (null)
+myint: 42
 mymbool: 1
 mymint: 42
 mymint64: 42
@@ -13,21 +9,14 @@ myoint: 0 <unset>
 myoint64: 0 <unset>
 myofloat: 0.000000 <unset>
 myostring: (null) <unset>
-myvarstr: (null)
-group:
-    gmybool: 0
-    gmyint: 0
-    gmyint64: 0
-    gmyfloat: 0.000000
-    gmystring: (null)
 dgroup:
     dlvl2:
         dlvl3:
             gdmybool: 0
-            gdmyint: 0
-            gdmyint64: 0
-            gdmyfloat: 0.000000
-            gdmystring: (null)
+            gdmyint: 42
+            gdmyint64: 4242
+            gdmyfloat: 2.718000
+            gdmystring: grouped string
 list [2]:
     lmybool: 1
     lmyint: 23

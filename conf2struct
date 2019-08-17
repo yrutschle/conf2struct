@@ -140,7 +140,7 @@ header => <<'EOF',
 /* This gets included in the output .c file */
 
 
-/* config_type and lookup_fns are related, keep them together */
+/* config_type, lookup_fns, type2str are related, keep them together */
 typedef enum {
     CFG_BOOL,
     CFG_INT,
@@ -165,6 +165,19 @@ lookup_fn lookup_fns[] = {
     NULL,  /* CFG_LIST */
     #endif
 };
+
+const char* type2str[] = {
+    "boolean",
+    "int",
+    "int64",
+    "float",
+    "string",
+    "group",
+    "array",
+    "list",
+};
+
+/* /config_type */
 
 typedef union {
     int def_bool;
@@ -425,14 +438,17 @@ static void print_setting(config_type type, void* val)
 * types, init for scalars */
 static void read_block_init(void* target, config_setting_t* cfg, struct config_desc* desc)
 {
-    size_t len;
+    size_t len = 0;
     void* block;
-    config_setting_t* setting = config_setting_lookup(cfg, desc->name);
+    config_setting_t* setting;
 
     switch (desc->type) {
     case CFG_LIST:
     case CFG_ARRAY:
-        len = config_setting_length(setting);
+        if (cfg) {
+            setting = config_setting_lookup(cfg, desc->name);
+            len = config_setting_length(setting);
+        } 
         block = malloc(desc->size * len);
 
         *(size_t*)(((char*)target) + desc->offset_len) = len;
@@ -447,6 +463,8 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
     default: 
         /* scalar types: copy default */
         memcpy(((char*)target) + desc->offset, &desc->default_val, desc->size);
+        TRACE_READ(("setting %s to default ", desc->name));
+        print_setting(desc->type,(char*)target + desc->offset);
         break;
     }
 }
@@ -465,52 +483,71 @@ static int read_block_setval(void* target,
     size_t len;
     void* block;
     lookup_fn lookup_fn;
-    int in_cfg, in_cl; /* Present in config file?  present on command line? */
-    config_setting_t* setting;
+    int in_cfg = 0, in_cl = 0; /* Present in config file?  present on command line? */
+    config_setting_t* setting = NULL;
 
     switch (desc->type) {
     case CFG_LIST:
-        setting = config_setting_lookup(cfg, desc->name);
-        len = config_setting_length(setting);
-        block = *(void**)(((char*)target) + desc->offset);
-        for (i = 0; i < len; i++) {
-            config_setting_t* elem = config_setting_get_elem(setting, i);
-            if (!read_block(elem, (char*)block + desc->size * i, desc->sub_group, errmsg))
-                return 0;
+        if (cfg) {
+            setting = config_setting_lookup(cfg, desc->name);
+            len = config_setting_length(setting);
+            block = *(void**)(((char*)target) + desc->offset);
+            for (i = 0; i < len; i++) {
+                config_setting_t* elem = config_setting_get_elem(setting, i);
+                if (!read_block(elem, (char*)block + desc->size * i, desc->sub_group, errmsg))
+                    return 0;
+            }
         }
         break;
 
     case CFG_ARRAY:
-        setting = config_setting_lookup(cfg, desc->name);
-        len = config_setting_length(setting);
-        block = *(void**)(((char*)target) + desc->offset);
-        for (i = 0; i < len; i++) {
-            config_setting_t* elem = config_setting_get_elem(setting, i);
-            settingcpy(desc->array_type, (char*)block + desc->size * i, elem);
-            TRACE_READ(("[%d] = ", i));
-            print_setting(desc->array_type, (char*)block + desc->size *i); TRACE_READ(("\n"));
+        if (cfg) {
+            setting = config_setting_lookup(cfg, desc->name);
+            len = config_setting_length(setting);
+            block = *(void**)(((char*)target) + desc->offset);
+            for (i = 0; i < len; i++) {
+                config_setting_t* elem = config_setting_get_elem(setting, i);
+                settingcpy(desc->array_type, (char*)block + desc->size * i, elem);
+                TRACE_READ(("[%d] = ", i));
+                print_setting(desc->array_type, (char*)block + desc->size *i); TRACE_READ(("\n"));
+            }
         }
         break;
 
     case CFG_GROUP:
-        setting = config_setting_lookup(cfg, desc->name);
+        if (cfg) setting = config_setting_lookup(cfg, desc->name);
         block = *(void**)(((char*)target) + desc->offset);
         if (!read_block(setting, block, desc->sub_group, errmsg)) return 0;
         break;
 
     default: /* scalar types */
-
-        lookup_fn = lookup_fns[desc->type];
-        in_cfg = lookup_fn(cfg, desc->name, ((char*)target) + desc->offset) == CONFIG_TRUE;
-        if (desc->arg_cl) {
-            if ((*(struct arg_int**)desc->arg_cl)->count) {
-                TRACE_READ(("command line override to "));
-                clcpy(desc->type, ((char*)target) + desc->offset, desc->arg_cl);
-                in_cl = 1;
+        TRACE_READ((" `%s'", desc->name));
+        if (cfg && config_setting_lookup(cfg, desc->name)) {
+            TRACE_READ((" is in config file"));
+            /* setting is present in cfg, look it up */
+            lookup_fn = lookup_fns[desc->type];
+            if (lookup_fn(cfg, desc->name, ((char*)target) + desc->offset) != CONFIG_TRUE) {
+                TRACE_READ((" but wrong type (expected %s) ", type2str[desc->type]));
+                asprintf(errmsg, "Option \"%s\" wrong type, expected %s\n", 
+                    desc->name, type2str[desc->type]);
+                return 0;
             }
+            in_cfg = 1;
+        } else {
+            TRACE_READ((" not in config file"));
+        }
+        if (desc->arg_cl && (*(struct arg_int**)desc->arg_cl)->count) {
+            clcpy(desc->type, ((char*)target) + desc->offset, desc->arg_cl);
+            TRACE_READ((", command line sets to "));
+            in_cl = 1;
+        } else {
+            TRACE_READ((", not in command line"));
+        }
+        if (!(in_cfg || in_cl)) {
+            TRACE_READ(("\n"));
+            return 0;
         }
         print_setting(desc->type, (((char*)target) + desc->offset)); TRACE_READ(("\n"));
-        if (!(in_cfg || in_cl)) return 0;
         break;
     }
     return 1;
@@ -1070,7 +1107,7 @@ EOF
         my $cfg_type = uc "CFG_$setting->{type}";
         my $optional = $setting->{optional} // "0";
         my $default = $setting->{default};
-        my $mandatory = (not ($optional or $default)) ? 1 : 0;
+        my $mandatory = (not ($optional or defined $default)) ? 1 : 0;
         if ($setting->{type} eq 'string') {
             $default = defined $default ? "\"$default\"" : "NULL";
         } else {
