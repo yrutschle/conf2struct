@@ -47,6 +47,7 @@ my $hr = $conf->fetch_hashref("/");
 
 my $header = $hr->{header};
 my $parser = $hr->{parser};
+my $printer = $hr->{printer};
 
 
 # a bit of vocabulary:
@@ -1418,6 +1419,6 @@ print $h make_root_header($hr);
 open my $c, "> $parser" or die "$parser: $!\n";
 print $c make_c_head;
 print $c make_root_parser($hr);
-print $c make_root_print_settings($hr);
+print $c make_root_print_settings($hr) if $printer;
 
 

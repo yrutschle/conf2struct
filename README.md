@@ -48,6 +48,9 @@ configuration file:
 
 - `header`: output file name for the struct declarations 
 - `parser`: output file for the C code
+- `printer`: boolean, whether to include code for
+  configuration pretty-printer in C code. This can help for
+  debugging or looking at code that uses the configuration.
 - `config`: description of the target configuration file.
 This contains a `name` entry which will prefix all
 symbols, and a `items` declaration equivalent to that of a
@@ -185,7 +188,7 @@ Printer API
 -----------
 
 ```
-void foo_print(struct foo_item* in, int depth);
+void foo_fprint(FILE* out, struct foo_item* in, int depth);
 ```
 
 `conf2struct` builds a pretty-printer that takes a `struct`
@@ -195,7 +198,8 @@ usually 0.
 
 The goal of this function is debugging to check
 `conf2struct`'s idea of what is going on, rather than for
-use for production use.
+use for production use. It is only produced it setting
+`printer` is set.
 
 Command line API
 ----------------

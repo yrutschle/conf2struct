@@ -5,6 +5,8 @@
 header: "c2s.h";
 parser: "c2s.c";
 
+printer: true;
+
 #іncludes: (); # None in this project
 
 conffile_option: ( "F", "conffile" );

@@ -1,6 +1,8 @@
 header: "c2s.h"
 parser: "c2s.c"
 
+printer: true;
+
 includes: ( "stdio.h", " <stdlib.h>" );
 
 conffile_option: ("F", "conffile");
