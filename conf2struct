@@ -86,31 +86,6 @@ sub scalar_type {
 }
 
 ################################################################################
-# Turns a libconfig type to the corresponding libconfig function to parse it
-sub scalar_type_lookup {
-    my ($in) = @_;
-    {
-        'bool'          => 'config_setting_lookup_bool',
-        'int'           => 'config_setting_lookup_int',
-        'int64'         => 'config_setting_lookup_int64',
-        'float'         => 'config_setting_lookup_float',
-        'string'        => 'config_setting_lookup_string',
-    }->{$in};
-}
-
-################################################################################
-sub scalar_type_get {
-    my ($in) = @_;
-    {
-        'bool'       => 'config_setting_get_bool',
-        'int'           => 'config_setting_get_int',
-        'int64'         => 'config_setting_get_int64',
-        'float'         => 'config_setting_get_float',
-        'string'        => 'config_setting_get_string',
-    }->{$in};
-}
-
-################################################################################
 # Returns the printf format to print the libconfig type
 sub scalar_type_print {
     my ($in) = @_;
@@ -159,11 +134,9 @@ lookup_fn lookup_fns[] = {
     (lookup_fn)config_setting_lookup_int64,
     (lookup_fn)config_setting_lookup_float,
     (lookup_fn)config_setting_lookup_string,
-    #if 0
     NULL,  /* CFG_GROUP */
     NULL,  /* CFG_ARRAY */
     NULL,  /* CFG_LIST */
-    #endif
 };
 
 const char* type2str[] = {
@@ -469,7 +442,10 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
     }
 }
 
-static int read_block(config_setting_t* cfg, void* target, struct config_desc* desc, char** errmsg);
+static int read_block(config_setting_t* cfg, 
+                      void* target, 
+                      struct config_desc* desc, 
+                      char** errmsg);
 
 /* When traversing configuration, set value from config
 * file, or command line 
@@ -553,6 +529,7 @@ static int read_block_setval(void* target,
     return 1;
 }
 
+/* Set *_is_present flag for target */
 static void target_is_present(void* target, struct config_desc* desc)
 {
     *(int*)((char*)target + desc->offset_present) = 1;
@@ -588,92 +565,11 @@ static int read_block(config_setting_t* cfg, void* target, struct config_desc* d
     }
 }
 
-/* Reads from libconfig object `cfg` into struct `setting` according to format `e` */
-#if 0
-static int read_block_old(config_setting_t* cfg, void* setting, struct config_desc * e, char** errmsg)
-{
-    lookup_fn lookup_fn;
-    config_setting_t* s;
-    void* block;
-    size_t len;
-    int res; char out[128] = {0};
-
-    for (; e->name; e++) {
-        TRACE_READ(("reading %s%s%s: ", e->optional ? "optional " : "", e->mandatory ? "mandatory " : "",  e->name));
-        e->base_addr = setting;
-        memset((char*)setting + e->offset, e->size, 0);
-        if (cfg) {
-        if (s = config_setting_lookup(cfg, e->name)) {
-            switch (e->type) {
-            case CFG_LIST:
-            case CFG_ARRAY:
-                len = config_setting_length(s);
-                block = malloc(e->size * len);
-                for (int i = 0; i < len; i++) {
-                    config_setting_t* elem = config_setting_get_elem(s, i);
-                    if (e->type == CFG_LIST) {
-                        if (!read_block(elem, (char*)block + e->size * i, e->sub_group, errmsg))
-                            return 0;
-                    } else { /* CFG_ARRAY */
-                        settingcpy(e->array_type, (char*)block + e->size * i, elem);
-                        TRACE_READ(("[%d] = ", i));
-                        print_setting(e->array_type, (char*)block + e->size *i); TRACE_READ(("\n"));
-                    }
-                }
-                *(size_t*)(((char*)setting) + e->offset_len) = len;
-                *(void**)(((char*)setting) + e->offset) = block;
-                break;
-
-            case CFG_GROUP:
-                block = malloc(e->size);
-                if (!read_block(s, block, e->sub_group , errmsg)) return 0;
-                *(void**)(((char*)setting) + e->offset) = block;
-                break;
-
-
-            default:
-                /* First, lookup in config file */
-                lookup_fn = lookup_fns[e->type];
-                if (lookup_fn(cfg, e->name, ((char*)setting) + e->offset) == CONFIG_FALSE) {
-                    asprintf(errmsg, "Parsing of option \"%s\" failed", e->name);
-                    return 0;
-                }
-                print_setting(e->type, (((char*)setting) + e->offset)); TRACE_READ(("\n"));
-            }
-            if (e->optional) { /* set field _is_present = 1 */
-                TRACE_READ(("set optional at offset: %X sizeof(int)=%d\n",  e->offset,sizeof(int)));
-                *(int*)((char*)setting + e->offset_present) = 1;
-            }
-        } else {
-            TRACE_READ(("not found "));
-            if (e->mandatory && !e->optional) {
-                asprintf(errmsg, "Mandatory option \"%s\" not found", e->name);
-                return 0;
-            }
-            TRACE_READ((", setting to ")); print_setting(e->type, &e->default_val); TRACE_READ(("\n"));
-            memcpy(((char*)setting) + e->offset, &e->default_val, e->size);
-        }
-        }
-        /* Then, override from command line */ 
-        if (e->arg_cl) {
-            /*(all arg_* structs start the same so we can cast to any arg_ type we want) */
-            if ((*(struct arg_int**)e->arg_cl)->count) {
-                TRACE_READ(("command line override to "));
-                clcpy(e->type, ((char*)setting) + e->offset, e->arg_cl);
-                print_setting(e->type, (((char*)setting) + e->offset)); TRACE_READ(("\n"));
-            }
-        }
-        TRACE_READ(("done %s\n", e->name));
-    }
-    return 1;
-}
-#endif
-
 /* Copy regex match into newly allocated string
  * out: newly allocated string (caller has to free it)
  * in: string into which the match was made
  * pmatch: the match to extract */
-void pmatchcpy(char** out, const char* in, regmatch_t* pmatch)
+static void pmatchcpy(char** out, const char* in, regmatch_t* pmatch)
 {
     int len = pmatch->rm_eo - pmatch->rm_so;
     *out = calloc(len+1, 1);
@@ -727,7 +623,7 @@ static int set_target_fields(void* target_addr, struct compound_cl_arg* arg, con
 
 /* Goes over a list, finds if a group matches the specified string and overwrite
 * it if it does. */
-int override_on_str(struct compound_cl_arg* arg, const char* str, regmatch_t* pmatch)
+static int override_on_str(struct compound_cl_arg* arg, const char* str, regmatch_t* pmatch)
 {
     struct config_desc * desc = arg->base_entry;
     void* list_base = *(void**)(desc->base_addr + desc->offset);
@@ -751,7 +647,7 @@ int override_on_str(struct compound_cl_arg* arg, const char* str, regmatch_t* pm
 }
 
 /* Goes over a list and override group if needed */
-int override_elem(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch) 
+static int override_elem(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch) 
 {
     char* str;
     int allocated = 0;
@@ -774,7 +670,7 @@ int override_elem(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch
 
 /* Add an argument to a list, overriding if required or
 * appending otherwise */
-int add_arg_to_list(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch)
+static int add_arg_to_list(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmatch)
 {
     struct config_desc * desc = arg->base_entry;
     void* list_base = *(void**)(desc->base_addr + desc->offset);
@@ -806,7 +702,10 @@ int add_arg_to_list(struct compound_cl_arg* arg, int arg_index, regmatch_t* pmat
 * arg: description of the command line argument
 * arg_index: occurence of this argument on the command line
 */
-int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, int arg_index, char** errmsg)
+static int regcompmatch(regmatch_t* pmatch, 
+                        struct compound_cl_arg* arg, 
+                        int arg_index, 
+                        char** errmsg)
 {
     struct arg_str* arg_cl = *arg->arg_cl;
     regex_t preg;
@@ -828,7 +727,10 @@ int regcompmatch(regmatch_t* pmatch, struct compound_cl_arg* arg, int arg_index,
 }
 
 /* Read compound options described in `arg`, from `cfg`, to `setting` */
-static int read_compounds(config_setting_t* cfg, void* setting, struct compound_cl_arg* arg, char** errmsg)
+static int read_compounds(config_setting_t* cfg, 
+                          void* setting, 
+                          struct compound_cl_arg* arg, 
+                          char** errmsg)
 {
     int res, pmatch_cnt, arg_i;
     struct arg_str* arg_cl;
@@ -1006,10 +908,10 @@ $banner
 
 EOF
 
-foreach my $h (@{$root->{includes}}) {
-    $h = "\"$h\"" unless $h =~ /\<.*\>/;
-    $out .= "#include $h\n";
-}
+    foreach my $h (@{$root->{includes}}) {
+        $h = "\"$h\"" unless $h =~ /\<.*\>/;
+        $out .= "#include $h\n";
+    }
 
     $out .= make_struct_header($name, $setting);
 
@@ -1035,56 +937,6 @@ EOF
 
     return $out;
 }
-
-################################################################################
-# Returns the default for a setting, taking in account type
-# and optionality
-sub default_value {
-    my ($s) = @_;
-
-    return undef unless defined $s->{default};
-
-    if ($s->{type} eq "string") {
-        if ($s->{optional}) {
-            return "NULL";
-        } else {
-            return "\"$s->{default}\"";
-        }
-    } else {
-        return $s->{default};
-    }
-}
-
-################################################################################
-# Constructor generation
-# (builds struct initialised with defaults)
-################################################################################
-sub make_init {
-    my ($prefix, $in) = @_;
-
-    my $out = <<EOF;
-static void ${prefix}_init(struct ${prefix}_item* cfg) {
-        memset(cfg, 0, sizeof(*cfg));
-EOF
-
-    foreach my $setting (@{$in->{items}}) {
-        next if $setting->{type} =~ /runtime/;
-
-        my $name = cfgname2c $setting->{name};
-        my $pname = "${prefix}_$name";
-
-        if ($setting->{type} =~ /list|group/) {
-            $out = make_init($pname, $setting) . $out;
-        } elsif ($setting->{type} =~ /array/) {
-            # no defaults for arrays yet
-        } else {
-            my $default = default_value $setting;
-            $out .= "\tcfg->$name = $default;\n" if defined $default;
-        }
-    }
-    $out .= "}\n\n";
-}
-
 
 ################################################################################
 # PARSER GENERATION
@@ -1356,6 +1208,9 @@ EOF
 ################################################################################
 # PRINTER GENERATION
 ################################################################################
+# This is generated code instead of table-based, so it
+# serves as an example of how to use the resulting C struct
+# Usually projects won't need to include this code
 sub make_print_settings {
     my ($name, $top_setting) = @_;
     my @settings = @{$top_setting->{items}};
@@ -1553,243 +1408,16 @@ sub get_item {
     return $e;
 }
 
-# Create code to copy group command line options to struct
-sub make_arg_cl_groups_copy {
-    my ($prefix, $root) = @_;
-
-    my @groups = @{$root->{cl_groups}};
-
-    my $out;
-    foreach my $g (@groups) {
-        # $g->{list} is a libconfig path to the list of
-        # groups, e.g. "application.books". It is turned to
-        # $typename, full name in C types("application_books")
-        # and $structname, path ("application->books")
-        my $typename = cfgname2c $g->{list};
-        my $structname = $g->{list};
-        $structname =~ s/\./->/g;
-        my $st_name = "struct ${prefix}_${typename}_item";
-        my $c_override = "/* No search for override */";
-        if ($g->{override}) {
-            my @override_setting = grep { $_->{path} eq $g->{override} } @{$g->{targets}};
-            my $override_val = "\"$override_setting[0]->{value}\"";
-            my $override_len;
-            if ($override_val =~ /\$(\d+)/) {
-                $override_val = "${prefix}_$g->{name}->sval [cl_i] + pmatch[$1].rm_so";
-                $override_len = "pmatch[$1].rm_eo - pmatch[$1].rm_so";
-            }
-            $override_len //=  (length($override_val) - 2);  # val + 2 quotes
-            $c_override = <<EOF
-        for (i = 0; i < cfg->${structname}_len; i++) {
-            if (!strncmp(cfg->${structname} [i].$g->{override}, $override_val,
-                         $override_len)) {
-                found = i;
-                break;
-            }
-        }
-EOF
-        }
-        my $target = get_item($root, $g->{list});
-        if ($target->{type} eq 'list') {
-            $c_override .= <<EOF;
-        if (found == -1) {
-            cfg->${structname }_len++;
-            cfg->${structname } = realloc(cfg->${structname }, cfg->${structname }_len * sizeof(*cfg->${structname }));
-            group = & cfg->${structname } [cfg->${structname }_len - 1];
-        } else {
-            group = & cfg->${structname } [found];
-        }
-EOF
-        } elsif ($target->{type} eq 'group') {
-            $c_override = "\tgroup = cfg->${structname};\n";
-        } else {
-            die "$g->{name}: Illegal target type `$target->{type}' (must be list or group)\n";
-        }
-        my $esc_pattern = $g->{pattern};
-        $esc_pattern =~ s/\\/\\\\/g;
-
-        $out .= <<EOF;
-#define MAX_MATCH 10
-    for (cl_i = 0; cl_i < ${prefix}_$g->{name}->count; cl_i++) {
-        regex_t preg;
-        regmatch_t pmatch[MAX_MATCH];
-        int res = regcomp(&preg, "$esc_pattern", REG_EXTENDED);
-        if (res) {
-            int errlen = regerror(res, &preg, NULL, 0);
-            char* errmsg = malloc(errlen);
-            regerror(res, &preg, errmsg, errlen);
-
-            fprintf(stderr, "$esc_pattern: %s\\n", errmsg);
-            exit(1);
-        }
-        res = regexec(&preg, ${prefix}_$g->{name}->sval [cl_i], MAX_MATCH, &pmatch[0], 0);
-        if (res) {
-            fprintf(stderr, "--$g->{name} %s: Illegal argument\\n", ${prefix}_$g->{name}->sval [cl_i]);
-            exit(1);
-        }
-        
-        int param_len, i, found = -1;
-        $st_name* group;
-
-$c_override
-
-        ${prefix}_${typename}_init(group);
-EOF
-        foreach my $t (@{$g->{targets}}) {
-            my $v = $t->{value};
-            my ($i, $l);
-            if ($v =~ /\$(\d+)/) {
-                $i = $1;
-                $v = "${prefix}_$g->{name}->sval [cl_i]+pmatch[$i].rm_so";
-                $l = "pmatch[$i].rm_eo - pmatch[$i].rm_so";
-            } else {
-                $l = length $v;
-                $v = "\"$v\"";
-            }
-            my $item = get_item($root, "$g->{list}.$t->{path}");
-            die "$t->{path}: unknown option\n" if not defined $item->{type};
-            if ($item->{type} eq 'string') {
-            $out .= <<EOF
-        param_len = $l;
-        group->$t->{path} = calloc(1, param_len + 1);
-        memcpy(group->$t->{path}, $v, param_len);
-EOF
-
-            } elsif ($item->{type} =~ /int|int64|float/) {
-                my $fmt = {
-                    "int" => "%d",
-                    "int64" => "%ld",
-                    "float" => "%lf",
-                }->{$item->{type}};
-                $out .= <<EOF;
-        sscanf($v, "$fmt", &group->$t->{path});
-EOF
-            } elsif ($item->{type} =~ /bool/) {
-                $out .= "\tgroup->$t->{path} = *((char*)$v) - '0';\n";
-            } else {
-                die "$t->{path}: type `$item->{type}' not supported in compound options\n";
-            }
-        }
-        $out .= "    }\n";
-    }
-    return $out;
-}
-
-################################################################################
-sub make_argtable_copy2struct {
-    my ($prefix, $in) = @_;
-
-    # arg_index is the index in the command line argument
-    # array, for groups and lists. ints also have indexes
-    # anyway, so we use it all the time
-    my $out = <<EOF;
-static void ${prefix}_cl_c2s(int arg_index, struct ${prefix}_item* cfg) {
-    int i, len;
-
-EOF
-    foreach my $setting (@{$in->{items}}) {
-        next if $setting->{type} =~ /runtime/;
-        next if $setting->{no_cl_accessors};
-
-        my $name = cfgname2c $setting->{name};
-        my $pname = "${prefix}_$name";
-
-        if ($setting->{type} =~ /list/) {
-            my $ac2s = make_argtable_copy2struct("${prefix}_${name}", $setting);
-            $out = <<EOF;
-$ac2s
-
-$out
-        len = ${pname}_$setting->{items}->[0]->{name}->count;
-        if (len) {
-            if (cfg->${name}_len) free(cfg->${name}); /* override conffile? */
-            cfg->${name}_len = len;
-            cfg->${name} = malloc(len * sizeof(*cfg->${name}));
-            memset(cfg->$name, 0, len* sizeof(*cfg->$name));
-            for (i = 0; i < len; i++) {
-                ${prefix}_${name}_cl_c2s(i, &cfg->$name [i]);
-            }
-        }
-EOF
-        } elsif ($setting->{type} =~ /group/) {
-            my $ac2s = make_argtable_copy2struct("${prefix}_${name}", $setting);
-            $out = <<EOF;
-$ac2s
-
-$out
-        if (!cfg->${name}) {
-            cfg->${name} = malloc(sizeof(*cfg->${name}));
-            memset(cfg->$name, 0, sizeof(*cfg->$name));
-        }
-        ${prefix}_${name}_cl_c2s(0, cfg->$name );
-EOF
-        } elsif ($setting->{type} =~ /array/) {
-            my $type = structtype $setting->{element_type};
-            my $assign = $type eq 'sval' ?
-                    "asprintf(&cfg->$name [i], \"%s\", $pname->$type [i]);"
-                    : "cfg->$name [i] = $pname->$type [i];";
-            $out .= <<EOF;
-            /* array */
-            len = $pname->count;
-            if (len) {
-                if (cfg->${name}_len) free(cfg->${name}); /* override conffile? */
-                cfg->${name}_len = len;
-                cfg->$name = malloc(len * sizeof(*cfg->$name));
-                for (i = 0; i < len; i++) {
-                    $assign
-                }
-            }
-EOF
-        } else {
-            $out .= "\tif ($pname->count) {\n";
-            $out .= "\t\tcfg->${name}_is_present = 1;\n" if $setting->{optional};
-            if ($setting->{type} =~ /int|int64/) {
-                $out .= "\t\tcfg->$name = $pname->ival [arg_index];\n";
-            } elsif ($setting->{type} eq 'float') {
-                $out .= "\t\tcfg->$name = $pname->dval [arg_index];\n";
-            } elsif ($setting->{type} eq 'bool') {
-                $out .= "\t\tcfg->$name = $pname->count;\n";
-            } elsif ($setting->{type} eq 'string') {
-                $out .= "\t\tasprintf(& cfg->$name, \"%s\", $pname->sval [arg_index]);\n";
-            } else {
-                die "Unknown type $setting->{type}\n";
-            }
-            $out .= "\t}\n";
-        }
-    }
-    $out .= "}\n\n";
-    return $out;
-}
-
-
-################################################################################
-sub make_argtable {
-    my ($root) = @_;
-
-    my $setting = $root->{config};
-    my $prefix = $setting->{name};
-
-    my $cl_groups_copy = make_arg_cl_groups_copy($prefix, $root);
-
-    my $copy = make_argtable_copy2struct($prefix, $setting);
-
-    return $copy;
-}
-
-
 ################################################################################
 # main
 ################################################################################
-
 
 open my $h, "> $header" or die "$header: $!\n";
 print $h make_root_header($hr);
 
 open my $c, "> $parser" or die "$parser: $!\n";
 print $c make_c_head;
-print $c make_init($hr->{config}->{name}, $hr->{config});
 print $c make_root_parser($hr);
 print $c make_root_print_settings($hr);
-print $c make_argtable($hr);
 
 
