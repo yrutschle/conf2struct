@@ -132,7 +132,7 @@ my @tests = (
         desc => "No config file, add to list",
     },
     {
-        schema => 'in2.sch',
+        schema => 'in3.sch',
         data => 'in2d.data',
         parser => 'parser.c',
         cmd => '-i 2302 -I 2032 -s "hello"',
