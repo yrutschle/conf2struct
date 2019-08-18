@@ -213,7 +213,7 @@ foreach my $test (@tests) {
     print "$res1 $res2 $res3\n";
     push @results, [$test->{index}, $test->{desc}, ($res1 or !$res2 or $res3)];
 
-    `lcov --directory . --capture --output-file sslh_cov.info`;
+    `lcov --directory . --capture --output-file conf2struct.info`;
     `genhtml sslh_cov.info`;
 
     chdir "..";
