@@ -1396,6 +1396,7 @@ sub make_argtable_cl_groups_decls {
         my $short = "NULL";
         $short = "\"$g->{short}\"" if exists $g->{short};
         my $name = "${prefix}_$g->{name}";
+        $g->{description} //= "";
         push @def, "\tstruct arg_str* $name;\n";
         push @init, "\t$name = arg_strn($short, \"$g->{name}\", $type, 0, 10, \"$g->{description}\"),\n";
     }
