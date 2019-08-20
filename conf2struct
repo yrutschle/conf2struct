@@ -829,8 +829,8 @@ int ##name_cl_parse(int argc, char* argv[], struct eg_item* cfg)
     }
 
 
-    if (eg_conffile->count) {
-        if (!c2s_parse_file(eg_conffile->filename[0], &c, &errmsg)) {
+    if (##name_conffile->count) {
+        if (!c2s_parse_file(##name_conffile->filename[0], &c, &errmsg)) {
             fprintf(stderr, "%s\n", errmsg);
             exit(1);
         }
