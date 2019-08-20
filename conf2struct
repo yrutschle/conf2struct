@@ -88,7 +88,18 @@ sub scalar_type {
         'float' => 'double',
         'string' => 'char*',
     }->{$in};
+    die "Unknown type `$in'\n" unless defined $out;
     return $out;
+}
+
+# Return true if setting is a scalar
+sub is_scalar {
+    my ($s) = @_;
+    if ($s->{type} =~ /bool|int|int64|float|string/) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 ################################################################################
@@ -972,7 +983,6 @@ EOF
             $default = $default // 0;
         }
         $default = ".default_val.def_$setting->{type} = $default";
-        my $sizeof = scalar_type $setting->{type};
         my $offset_present = $setting->{optional} ? "offsetof(struct ${name}_item, ${sname}_is_present)" : 0;
         my $c = "";
         my $sub_group = "NULL";
@@ -981,12 +991,16 @@ EOF
 
         my $arg_cl = "& ${name}_${sname}";
 
+        my $sizeof;
         if ($setting->{type} =~ /list|group/) {
             $c = make_table($hname, $setting);
             $sub_group = "table_${hname}";
             $sizeof = "struct ${hname}_item";
             $default = ".default_val.def_int = 0";
             $arg_cl = "NULL";
+        }
+        if (is_scalar $setting) {
+            $sizeof = scalar_type $setting->{type};
         }
         if ($setting->{type} =~ /list/) {
             $offset_len = "offsetof(struct ${name}_item, ${sname}_len)";

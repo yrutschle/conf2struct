@@ -139,6 +139,15 @@ my @tests = (
         out => 'out2i.txt',
         desc => "No config file, short options",
     },
+    {
+        schema => 'in4.sch',
+        data => 'in2d.data',
+        parser => 'parser.c',
+        cmd => '-i 2302 -I 2032 -s "hello"',
+        out => 'out4.txt',
+        desc => "Robustness: schema contains wrong type",
+        rb_perl => 1,  # Robustness test for Perl code
+    },
 );
 
 # Number tests
@@ -191,20 +200,36 @@ foreach my $test (@tests) {
     my $dir = prep_test_dir($test);
     chdir $dir or die "chdir $dir: $!\n";
 
+    # Robustness tests for the Perl scrupt result in make
+    # failing, so we ignore make result ($res1), and don't
+    # run the binary (which won't have made) so ignore
+    # $res2, and only test the output of the Perl code
+    # ($res3)
+    my $rbp = $test->{rb_perl};
+
     my $opts = "";
     $opts .= '-MDevel::Cover="-silent,on,-db,../cover_db"' if $coverage;
+
+    my ($res1, $res2, $res3);
     my $make = "SCHEMA=$test->{schema} PARSER=$test->{parser} PERLOPTS=$opts make";
-    my $res1 = system($make);
-    ok($res1 == 0, "$test->{desc} makes correctly");
-    if ($res1) {
-        diag("cmd: `$make`");
+    $make .= " > $test->{out} 2>&1" if $rbp;
+    $res1 = system($make);
+
+    if ($rbp) {
+        $res1 = 0;
+        $res2 = 1;
+    } else {
+        ok($res1 == 0, "$test->{desc} makes correctly");
+        if ($res1) {
+            diag("cmd: `$make`");
+        }
+
+        my $cmd = "stdbuf -o0 -e0 ./parser $test->{cmd} > $test->{out} 2>&1";
+        $res2 = system($cmd);
+        ok($res2, "$test->{desc} runs");
     }
 
-    my $cmd = "stdbuf -o0 -e0 ./parser $test->{cmd} > $test->{out} 2>&1";
-    my $res2 = system($cmd);
-    ok($res2, "$test->{desc} runs");
-
-    my $res3 = system("diff -u ../$test->{out} $test->{out}");
+    $res3 = system("diff -u ../$test->{out} $test->{out}");
     ok($res3 == 0, "$test->{desc} returns correctly");
     if ($res3) {
         diag("cmd: `$cmd`");
@@ -214,7 +239,7 @@ foreach my $test (@tests) {
     push @results, [$test->{index}, $test->{desc}, ($res1 or !$res2 or $res3)];
 
     `lcov --directory . --capture --output-file conf2struct.info`;
-    `genhtml sslh_cov.info`;
+    `genhtml conf2struct.info`;
 
     chdir "..";
     $tnum++;
