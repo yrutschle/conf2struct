@@ -809,7 +809,7 @@ static int c2s_parse_file(const char* filename, config_t* c, char**errmsg)
     return 1;
 }
 
-int ##name_cl_parse(int argc, char* argv[], struct eg_item* cfg)
+int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
 {
     int nerrors, res;
     config_t c;
@@ -838,7 +838,7 @@ int ##name_cl_parse(int argc, char* argv[], struct eg_item* cfg)
 
     s = config_lookup(&c, "/");
 
-    res = read_block(s, cfg, table_eg, &errmsg);
+    res = read_block(s, cfg, table_##name, &errmsg);
     if (!res) {
         fprintf(stderr, "%s\n", errmsg);
         return res;
