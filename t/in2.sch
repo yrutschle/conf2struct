@@ -41,6 +41,7 @@ config: {
             # A single group
             { name: "group", 
                 type: "group", 
+                no_cl_accessors: true;
                 items: (
                     { name: "gmybool"; type: "bool"; short: "b"; },
                     { name: "gmyint"; type: "int"; short: "i"; },

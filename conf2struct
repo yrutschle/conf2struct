@@ -958,8 +958,11 @@ EOF
 ################################################################################
 # PARSER GENERATION
 ################################################################################
+# opts:
+#       no_cl: disable command line options for this group
+#       and groups further below
 sub make_table {
-    my ($name, $top_setting) = @_;
+    my ($name, $top_setting, %opts) = @_;
     my @settings = @{$top_setting->{items}};
 
     my $out = <<EOF;
@@ -989,11 +992,12 @@ EOF
         my $offset_len = 0;
         my $array_type = -1;
 
-        my $arg_cl = "& ${name}_${sname}";
+        my $arg_cl = "NULL"; 
 
         my $sizeof;
         if ($setting->{type} =~ /list|group/) {
-            $c = make_table($hname, $setting);
+            my $no_cl = $opts{no_cl} || $setting->{no_cl_accessors};
+            $c = make_table($hname, $setting, no_cl => $no_cl);
             $sub_group = "table_${hname}";
             $sizeof = "struct ${hname}_item";
             $default = ".default_val.def_int = 0";
@@ -1001,6 +1005,7 @@ EOF
         }
         if (is_scalar $setting) {
             $sizeof = scalar_type $setting->{type};
+            $arg_cl = "& ${name}_${sname}" unless $opts{no_cl};
         }
         if ($setting->{type} =~ /list/) {
             $offset_len = "offsetof(struct ${name}_item, ${sname}_len)";
