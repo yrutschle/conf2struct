@@ -824,7 +824,7 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
     if (nerrors) {
         arg_print_errors(stdout, ##name_end, "##name"); 
         arg_print_syntax(stdout, argtable, "\\n");
-        arg_print_glossary(stdout, argtable, "  %-25s\t%s\\n");
+        arg_print_glossary(stdout, argtable, "  %-25s\t%s\n");
         return 0;
     }
 
