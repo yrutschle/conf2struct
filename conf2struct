@@ -110,7 +110,7 @@ sub scalar_type_print {
         'bool' => '%d',
         'int' => '%d',
         'int64' => "%lld",
-        'float' => "%f",
+        'float' => "%lf",
         'string' => '%s',
     }->{$in};
 }
@@ -446,12 +446,13 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
 
         *(size_t*)(((char*)target) + desc->offset_len) = len;
         *(void**)(((char*)target) + desc->offset) = block;
-        TRACE_READ((" sizing for %d elems ", len));
+        TRACE_READ((" sizing for %zu elems ", len));
         break;
 
     case CFG_GROUP:
         block = malloc(desc->size);
         *(void**)(((char*)target) + desc->offset) = block;
+        TRACE_READ((" sizing for %zu elems ", len));
         break;
 
     default: 
@@ -520,7 +521,7 @@ static int read_block_setval(void* target,
     default: /* scalar types */
         TRACE_READ((" `%s'", desc->name));
         if (cfg && config_setting_lookup(cfg, desc->name)) {
-            TRACE_READ((" is in config file"));
+            TRACE_READ((" in config file: "));
             /* setting is present in cfg, look it up */
             lookup_fn = lookup_fns[desc->type];
             if (lookup_fn(cfg, desc->name, ((char*)target) + desc->offset) != CONFIG_TRUE) {
@@ -529,6 +530,7 @@ static int read_block_setval(void* target,
                     desc->name, type2str[desc->type]);
                 return 0;
             }
+            print_setting(desc->type, (((char*)target) + desc->offset));
             in_cfg = 1;
         } else {
             TRACE_READ((" not in config file"));
@@ -536,6 +538,7 @@ static int read_block_setval(void* target,
         if (desc->arg_cl && (*(struct arg_int**)desc->arg_cl)->count) {
             clcpy(desc->type, ((char*)target) + desc->offset, desc->arg_cl);
             TRACE_READ((", command line sets to "));
+            print_setting(desc->type, (((char*)target) + desc->offset));
             in_cl = 1;
         } else {
             TRACE_READ((", not in command line"));
@@ -544,7 +547,7 @@ static int read_block_setval(void* target,
             TRACE_READ(("\n"));
             return 0;
         }
-        print_setting(desc->type, (((char*)target) + desc->offset)); TRACE_READ(("\n"));
+        TRACE_READ(("\n"));
         break;
     }
     return 1;
