@@ -6,9 +6,8 @@
 
 #include "c2s.h"
 
-void main(int argc, char* argv[]) {
-    struct eg_item config, config_cl;
-    const char* err;
+int main(int argc, char* argv[]) {
+    struct eg_item config_cl;
     int res;
 
     res = eg_cl_parse(argc, argv, &config_cl);
@@ -16,5 +15,7 @@ void main(int argc, char* argv[]) {
         exit(1);
     }
     eg_fprint(stdout, &config_cl,0);
+
+    exit(0);
 }
 

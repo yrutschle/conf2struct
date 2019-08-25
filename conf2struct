@@ -109,7 +109,7 @@ sub scalar_type_print {
     {
         'bool' => '%d',
         'int' => '%d',
-        'int64' => "%ld",
+        'int64' => "%lld",
         'float' => "%f",
         'string' => '%s',
     }->{$in};
@@ -294,7 +294,6 @@ static void clcpy(config_type type, void* target, const void* cl_arg)
 static void stringcpy(config_type type, void* target, char* from)
 {
     any_val val;
-    char* str;
     
     switch(type) {
     case CFG_BOOL:
@@ -411,13 +410,17 @@ static void print_setting(config_type type, void* val)
             printf("%d", *(int*)val);
             break;
         case CFG_INT64:
-            printf("%lld", *(long*)val);
+            printf("%lld", *(long long*)val);
             break;
         case CFG_FLOAT:
             printf("%f", *(double*)val);
             break;
         case CFG_STRING:
             printf("`%s'", *(char**)val);
+            break;
+        case CFG_GROUP:
+        case CFG_LIST:
+        case CFG_ARRAY:
             break;
         }
     }
@@ -547,9 +550,12 @@ static int read_block_setval(void* target,
 }
 
 /* Set *_is_present flag for target */
-static void target_is_present(void* target, struct config_desc* desc)
+static void target_is_present(void* target, struct config_desc* desc, int val)
 {
-    *(int*)((char*)target + desc->offset_present) = 1;
+    if (desc->optional) {  /* _is_present only exists in target for optional settings */
+        TRACE_READ((" mark as set"));
+        *(int*)((char*)target + desc->offset_present) = val;
+    }
 }
 
 /* traverses the configuration; allocates memory if needed,
@@ -561,13 +567,11 @@ static void target_is_present(void* target, struct config_desc* desc)
 */
 static int read_block(config_setting_t* cfg, void* target, struct config_desc* desc, char** errmsg)
 {
-    config_setting_t* s = NULL;
     int set;
 
     for (; desc->name; desc++) {
         TRACE_READ(("reading %s%s%s: ", desc->optional ? "optional " : "", desc->mandatory ? "mandatory " : "",  desc->name));
         desc->base_addr = target;
-        memset((char*)target + desc->offset, desc->size, 0);
 
 
         read_block_init(target, cfg, desc);
@@ -578,8 +582,9 @@ static int read_block(config_setting_t* cfg, void* target, struct config_desc* d
             return 0;
         }
 
-        if (set && desc->optional) target_is_present(target, desc);
+        if (desc->optional) target_is_present(target, desc, set && desc->optional);
     }
+    return 1;
 }
 
 /* Copy regex match into newly allocated string
@@ -621,7 +626,7 @@ static int set_target_fields(void* target_addr, struct compound_cl_arg* arg, con
             pmatchcpy(&str, clval, &pmatch[pmatch_cnt]);
 
             stringcpy(element->type, (char*)target_addr + element->offset, str);
-            TRACE_CMPD(("setting %X+%d to : ", target_addr , element->offset));
+            TRACE_CMPD(("setting %p+%zu to : ", target_addr , element->offset));
             print_setting(element->type , (char*)target_addr + element->offset);
             TRACE_CMPD(("\n"));
 
@@ -636,6 +641,7 @@ static int set_target_fields(void* target_addr, struct compound_cl_arg* arg, con
         }
     }
 
+    return 1;
 }
 
 /* Goes over a list, finds if a group matches the specified string and overwrite
@@ -749,10 +755,9 @@ static int read_compounds(config_setting_t* cfg,
                           struct compound_cl_arg* arg, 
                           char** errmsg)
 {
-    int res, pmatch_cnt, arg_i;
+    int arg_i;
     struct arg_str* arg_cl;
     regmatch_t pmatch[MAX_MATCH];
-    struct compound_cl_target* target;
 
     for (; arg->regex; arg++) {
         arg_cl = *arg->arg_cl;
@@ -788,6 +793,7 @@ static int read_compounds(config_setting_t* cfg,
         }
         TRACE_CMPD(("done %s\n", arg_cl->hdr.longopts));
     }
+    return 1;
 }
 
 /* read config file `filename` into `c` */
@@ -1163,7 +1169,7 @@ EOF
 
 EOF
     }
-    $out .= "\tNULL\n};\n\n";
+    $out .= "\t{ 0 }\n};\n\n";
 
     return $out;
 }
@@ -1246,7 +1252,6 @@ static void ${name}_fprint(
         struct ${name}_item* $name,
         int depth) 
 {
-        int i;
 EOF
 
     foreach my $setting (@settings) {
@@ -1259,7 +1264,7 @@ EOF
 $c
 $out
         indent(out, depth);
-        fprintf(out, "${sname} [%d]:\\n", $name->${sname}_len);
+        fprintf(out, "${sname} [%zu]:\\n", $name->${sname}_len);
         for (int i = 0; i < $name->${sname}_len; i++) {
             $pname(out, &$name->${sname}\[i\], depth+1);
         }
@@ -1280,8 +1285,8 @@ EOF
             my $fmt = scalar_type_print $setting->{element_type};
             $out .= <<EOF
         indent(out, depth);
-        fprintf(out, "${sname} [%d]:\\n", $name->${sname}_len);
-        for (i = 0; i < $name->${sname}_len; i++) {
+        fprintf(out, "${sname} [%zu]:\\n", $name->${sname}_len);
+        for (int i = 0; i < $name->${sname}_len; i++) {
             indent(out, depth+1);
             fprintf(out, "%d:\\t$fmt\\n", i, $name->${sname}\[i\]);
         }

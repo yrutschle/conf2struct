@@ -201,42 +201,44 @@ foreach my $test (@tests) {
     chdir $dir or die "chdir $dir: $!\n";
 
     # Robustness tests for the Perl scrupt result in make
-    # failing, so we ignore make result ($res1), and don't
+    # failing, so we ignore make result ($res_make), and don't
     # run the binary (which won't have made) so ignore
-    # $res2, and only test the output of the Perl code
-    # ($res3)
+    # $res_run, and only test the output of the Perl code
+    # ($res_diff)
     my $rbp = $test->{rb_perl};
 
     my $opts = "";
     $opts .= '-MDevel::Cover="-silent,on,-db,../cover_db"' if $coverage;
 
-    my ($res1, $res2, $res3);
+    # $res variables are 0 on success, 1 on failure
+    my ($res_make, $res_run, $res_diff);
     my $make = "SCHEMA=$test->{schema} PARSER=$test->{parser} PERLOPTS=$opts make";
     $make .= " > $test->{out} 2>&1" if $rbp;
-    $res1 = system($make);
+    $res_make = system($make);
 
+    my $cmd;
     if ($rbp) {
-        $res1 = 0;
-        $res2 = 1;
+        $res_make = 0;
+        $res_run = 0;
     } else {
-        ok($res1 == 0, "$test->{desc} makes correctly");
-        if ($res1) {
+        ok($res_make == 0, "$test->{desc} makes correctly");
+        if ($res_make) {
             diag("cmd: `$make`");
         }
 
-        my $cmd = "stdbuf -o0 -e0 ./parser $test->{cmd} > $test->{out} 2>&1";
-        $res2 = system($cmd);
-        ok($res2, "$test->{desc} runs");
+        $cmd = "stdbuf -o0 -e0 ./parser $test->{cmd} > $test->{out} 2>&1";
+        $res_run = system($cmd);
+        ok($res_run == 0, "$test->{desc} runs");
     }
 
-    $res3 = system("diff -u ../$test->{out} $test->{out}");
-    ok($res3 == 0, "$test->{desc} returns correctly");
-    if ($res3) {
+    $res_diff = system("diff -u ../$test->{out} $test->{out}");
+    ok($res_diff == 0, "$test->{desc} returns correctly");
+    if ($res_run || $res_diff) {
         diag("cmd: `$cmd`");
     }
 
-    print "$res1 $res2 $res3\n";
-    push @results, [$test->{index}, $test->{desc}, ($res1 or !$res2 or $res3)];
+    print "make:$res_make run:$res_run diff:$res_diff\n";
+    push @results, [$test->{index}, $test->{desc}, ($res_make or $res_run or $res_diff)];
 
     `lcov --directory . --capture --output-file conf2struct.info`;
     `genhtml conf2struct.info`;

@@ -1,6 +1,6 @@
 all: parser
 
-CFLAGS=-g -fprofile-arcs -ftest-coverage
+CFLAGS=-g -fprofile-arcs -ftest-coverage -Wall
 
 OBJ=c2s.o parser.o argtable3.o
 parser: c2s.c $(OBJ)
