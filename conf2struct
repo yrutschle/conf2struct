@@ -446,6 +446,7 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
 
         *(size_t*)(((char*)target) + desc->offset_len) = len;
         *(void**)(((char*)target) + desc->offset) = block;
+        TRACE_READ((" sizing for %d elems ", len));
         break;
 
     case CFG_GROUP:
@@ -1131,6 +1132,7 @@ EOF
         my $targets = "$list_targets";
         my $arg_cl = "& ${name}_$s->{name}";
         my $regex = $s->{pattern};
+        $regex =~ s/\\/\\\\/g; # C interprets \d as escape sequence, so escape backslashes
 
         my $base_entry = make_baseref($name, $root, $s);
 
@@ -1185,7 +1187,11 @@ $banner
 #include <stddef.h>
 #include "$header"
 #include "argtable3.h"
+#ifdef LIBPCRE
+#include <pcreposix.h>
+#else
 #include <regex.h>
+#endif
 
 EOF
 }
