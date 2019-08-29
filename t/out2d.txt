@@ -28,6 +28,7 @@ dgroup:
             gdmyint64: 12341234
             gdmyfloat: 3.141000
             gdmystring: hello world
+        list [0]:
 list [3]:
     lmybool: 0
     lmyint: 21322

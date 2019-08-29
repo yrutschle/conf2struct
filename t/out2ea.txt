@@ -28,6 +28,7 @@ dgroup:
             gdmyint64: 123
             gdmyfloat: 3.141000
             gdmystring: string in deep group
+        list [0]:
 list [6]:
     lmybool: 0
     lmyint: 21322

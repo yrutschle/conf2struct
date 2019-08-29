@@ -440,7 +440,8 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
     case CFG_ARRAY:
         if (cfg) {
             setting = config_setting_lookup(cfg, desc->name);
-            len = config_setting_length(setting);
+            if (setting)
+                len = config_setting_length(setting);
         } 
         block = malloc(desc->size * len);
 
@@ -478,7 +479,7 @@ static int read_block_setval(void* target,
                              char** errmsg)
 {
     int i;
-    size_t len;
+    size_t len = 0;
     void* block;
     lookup_fn lookup_fn;
     int in_cfg = 0, in_cl = 0; /* Present in config file?  present on command line? */
@@ -488,7 +489,8 @@ static int read_block_setval(void* target,
     case CFG_LIST:
         if (cfg) {
             setting = config_setting_lookup(cfg, desc->name);
-            len = config_setting_length(setting);
+            if (setting) 
+                len = config_setting_length(setting);
             block = *(void**)(((char*)target) + desc->offset);
             for (i = 0; i < len; i++) {
                 config_setting_t* elem = config_setting_get_elem(setting, i);
@@ -501,7 +503,8 @@ static int read_block_setval(void* target,
     case CFG_ARRAY:
         if (cfg) {
             setting = config_setting_lookup(cfg, desc->name);
-            len = config_setting_length(setting);
+            if (setting)
+                len = config_setting_length(setting);
             block = *(void**)(((char*)target) + desc->offset);
             for (i = 0; i < len; i++) {
                 config_setting_t* elem = config_setting_get_elem(setting, i);

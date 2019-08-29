@@ -62,6 +62,9 @@ config: {
                       { name: "gdmyint64"; type: "int64"; short: "I"; },
                       { name: "gdmyfloat"; type: "float";  short: "f"; },
                       { name: "gdmystring"; type: "string";  short: "s"; }
+                  )},
+                  {name: "list"; type: "list"; items: (
+                      { name: "gdlint"; type: "int" }
                   )}
               )}
              )
