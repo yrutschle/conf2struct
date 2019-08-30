@@ -32,6 +32,8 @@ setting need to be copied to a structure. Put both problems
 together, and you get this program as a solution by taking a
 step up.)
 
+See the [tutorial](tutorial.md) for a gentle introduction.
+This is more of a reference documentation.
 
 Configuration file
 ==================
