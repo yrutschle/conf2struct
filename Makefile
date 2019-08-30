@@ -24,6 +24,7 @@ example: $(EG_OBJ)
 example.c: eg_conf.cfg
 	./conf2struct eg_conf.cfg
 
+parser.o: example.c
 
 clean:
 	rm -f *.o example.[ch] confcheck example
