@@ -738,13 +738,16 @@ static int regcompmatch(regmatch_t* pmatch,
                         int arg_index, 
                         char** errmsg)
 {
+    char* regerr;
     struct arg_str* arg_cl = *arg->arg_cl;
     regex_t preg;
     int res = regcomp(&preg, arg->regex, REG_EXTENDED);
     if (res) {
         int errlen = regerror(res, &preg, NULL, 0);
-        *errmsg = malloc(errlen);
-        regerror(res, &preg, *errmsg, errlen);
+        regerr = malloc(errlen);
+        regerror(res, &preg, regerr, errlen);
+        asprintf(errmsg, "compiling pattern /%s/:%s", arg->regex, regerr);
+        free(regerr);
         return 0;
     }
     res = regexec(&preg, arg_cl->sval[arg_index], MAX_MATCH, &pmatch[0], 0);
