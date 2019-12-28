@@ -1106,6 +1106,18 @@ sub make_baseref {
 }
 
 ################################################################################
+# Make a cstruct name from a command line setting name;
+# Essentially, this is prefix + setting name, with dashes
+# turned to underscore:
+# make_cstruct_name "eg", "list-edit" => "eg_list_edit"
+sub make_cstruct_name {
+    my ($prefix, $name) = @_;
+    $name =~ s/-/_/g;
+    return "${prefix}_$name";
+}
+
+
+################################################################################
 # Generate table for compound option processing
 sub make_compound_table {
     my ($name, $root) = @_;
@@ -1121,7 +1133,8 @@ EOF
         my $structname = $s->{list};
         $structname =~ s/\./->/g;
 
-        my $list_targets = "${name}_$s->{name}_targets";
+        my $cstruct_basename = make_cstruct_name($name, $s->{name});
+        my $list_targets = "${cstruct_basename}_targets";
         my $entries = "static struct compound_cl_target $list_targets [] = {\n";
         my $item = get_item($root, $s->{list});
 
@@ -1140,7 +1153,7 @@ EOF
         $out = "$entries$out";
 
         my $targets = "$list_targets";
-        my $arg_cl = "& ${name}_$s->{name}";
+        my $arg_cl = "& $cstruct_basename";
         my $regex = $s->{pattern};
         $regex =~ s/\\/\\\\/g; # C interprets \d as escape sequence, so escape backslashes
 
@@ -1435,7 +1448,7 @@ sub make_argtable_cl_groups_decls {
         $type = "\"$g->{argdesc}\"" if exists $g->{argdesc};
         my $short = "NULL";
         $short = "\"$g->{short}\"" if exists $g->{short};
-        my $name = "${prefix}_$g->{name}";
+        my $name = make_cstruct_name $prefix, $g->{name};
         $g->{description} //= "";
         push @def, "\tstruct arg_str* $name;\n";
         push @init, "\t$name = arg_strn($short, \"$g->{name}\", $type, 0, 10, \"$g->{description}\"),\n";

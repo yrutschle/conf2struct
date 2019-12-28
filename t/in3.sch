@@ -76,7 +76,7 @@ cl_groups: (
                );
       },
 
-    { name: "list_edit"; pattern: "([[:digit:]]),([[:digit:]]+),(.*)";
+    { name: "list-edit"; pattern: "([[:digit:]]),([[:digit:]]+),(.*)";
       list: "list";
       override: "lmystring";
       targets: (
