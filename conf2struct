@@ -426,6 +426,47 @@ static void print_setting(config_type type, void* val)
     }
 }
 
+/* Changes all dashes to underscores in a string of
+* vice-versa */
+void strswap_ud(const char target, char* str)
+{
+    char* c;
+    for (c = str; *c; c++)
+        if (*c == (target == '_' ? '-' : '_'))
+             *c = (target == '_' ? '_' : '-');
+}
+
+/* Same as config_setting_lookup() but looks up with dash or
+* underscore so `my_setting` and `my-setting` match the same */
+config_setting_t* config_setting_lookup_ud(config_setting_t* cfg, struct config_desc* desc)
+{
+    config_setting_t* setting;
+    char name[strlen(desc->name)+1];;
+    strcpy(name, desc->name);
+
+    strswap_ud('_', name);
+    setting = config_setting_lookup(cfg, name);
+    if (setting)
+        return setting;
+
+    strswap_ud('-', name);
+    setting = config_setting_lookup(cfg, name);
+    return setting;
+}
+
+int lookup_typed_ud(config_setting_t* cfg, void* target, struct config_desc *desc)
+{
+    lookup_fn lookup_fn = lookup_fns[desc->type];
+    char name[strlen(desc->name)+1];;
+    strcpy(name, desc->name);
+
+    strswap_ud('_', name);
+    if (lookup_fn(cfg, name, ((char*)target) + desc->offset) == CONFIG_TRUE)
+        return CONFIG_TRUE;
+
+    strswap_ud('-', name);
+    return lookup_fn(cfg, name, ((char*)target) + desc->offset);
+}
 
 /* When traversing configuration, allocate memory for plural
 * types, init for scalars */
@@ -439,7 +480,7 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
     case CFG_LIST:
     case CFG_ARRAY:
         if (cfg) {
-            setting = config_setting_lookup(cfg, desc->name);
+            setting = config_setting_lookup_ud(cfg, desc);
             if (setting)
                 len = config_setting_length(setting);
         } 
@@ -481,14 +522,13 @@ static int read_block_setval(void* target,
     int i;
     size_t len = 0;
     void* block;
-    lookup_fn lookup_fn;
     int in_cfg = 0, in_cl = 0; /* Present in config file?  present on command line? */
     config_setting_t* setting = NULL;
 
     switch (desc->type) {
     case CFG_LIST:
         if (cfg) {
-            setting = config_setting_lookup(cfg, desc->name);
+            setting = config_setting_lookup_ud(cfg, desc);
             if (setting) 
                 len = config_setting_length(setting);
             block = *(void**)(((char*)target) + desc->offset);
@@ -502,7 +542,7 @@ static int read_block_setval(void* target,
 
     case CFG_ARRAY:
         if (cfg) {
-            setting = config_setting_lookup(cfg, desc->name);
+            setting = config_setting_lookup_ud(cfg, desc);
             if (setting)
                 len = config_setting_length(setting);
             block = *(void**)(((char*)target) + desc->offset);
@@ -516,18 +556,17 @@ static int read_block_setval(void* target,
         break;
 
     case CFG_GROUP:
-        if (cfg) setting = config_setting_lookup(cfg, desc->name);
+        if (cfg) setting = config_setting_lookup_ud(cfg, desc);
         block = *(void**)(((char*)target) + desc->offset);
         if (!read_block(setting, block, desc->sub_group, errmsg)) return 0;
         break;
 
     default: /* scalar types */
         TRACE_READ((" `%s'", desc->name));
-        if (cfg && config_setting_lookup(cfg, desc->name)) {
+        if (cfg && config_setting_lookup_ud(cfg, desc)) {
             TRACE_READ((" in config file: "));
             /* setting is present in cfg, look it up */
-            lookup_fn = lookup_fns[desc->type];
-            if (lookup_fn(cfg, desc->name, ((char*)target) + desc->offset) != CONFIG_TRUE) {
+            if (lookup_typed_ud(cfg, target, desc) != CONFIG_TRUE) {
                 TRACE_READ((" but wrong type (expected %s) ", type2str[desc->type]));
                 asprintf(errmsg, "Option \"%s\" wrong type, expected %s\n", 
                     desc->name, type2str[desc->type]);
@@ -1420,7 +1459,7 @@ sub make_argtable_declarations {
             push @def, "struct $arg_type* $name;\n";
             my $arg_name = $name;
             $arg_name =~ s/.*?_//;  # Remove first prefix from cmdline name
-            $arg_name =~ s/_/-/g;
+            $arg_name =~ s/_/-/g;  # Command-line arg uses dashes
             $max = 10 if $setting->{type} eq 'array';
             my $type = ", NULL";
             $type = "" if $arg_type eq 'arg_lit';

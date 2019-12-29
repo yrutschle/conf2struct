@@ -148,6 +148,22 @@ my @tests = (
         desc => "Robustness: schema contains wrong type",
         rb_perl => 1,  # Robustness test for Perl code
     },
+    {
+        schema => 'in5.sch',
+        data => 'in5a.data',
+        parser => 'parser.c',
+        cmd => '-F in5a.data',
+        out => 'out5a1.txt',
+        desc => "Config file with dash/underscore adapts well",
+    },
+    {
+        schema => 'in5.sch',
+        data => 'in5a.data',
+        parser => 'parser.c',
+        cmd => '-F in5a.data --my-int1 22',
+        out => 'out5a2.txt',
+        desc => "Command-line with dash sets underscore field",
+    },
 );
 
 # Number tests

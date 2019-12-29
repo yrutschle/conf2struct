@@ -243,6 +243,27 @@ command line option appears (this is just one of several
 choices, including adding to the lists. It's not clear at
 this stage if a single strategy is the way to go.)
 
+Of dashes and underscores
+=========================
+
+`conf2struct` tries to follow standard conventions regarding
+dashes and underscores: for settings that contain either a
+dash or an underscore in their name, the command-line argument
+use dashes, while the configuration file can use either,
+irrespective of what is specified in the schema. So:
+
+        { name: "my_mint"; type: "int";  default: 42; },
+        { name: "my-mint"; type: "int";  default: 42; },
+
+are both equivalent, and the parser will accept command line
+argument `--my-mint`, and both configuration file settings
+`my_mint` and `my-mint` will change the same setting.
+
+If you think `my_mint` and `my-mint` should be different
+settings, I'd be curious to know what kind of interface you
+are trying to provide.
+
+
 
 Example
 =======
