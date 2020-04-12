@@ -1320,20 +1320,23 @@ static void ${name}_fprint(
         struct ${name}_item* $name,
         int depth) 
 {
+    ITERATOR_PLACEHOLDER
 EOF
 
+    my $need_iterator;
     foreach my $setting (@settings) {
         my $sname = cfgname2c $setting->{name};
         if ($setting->{type} eq 'list') {
             my $hname = "${name}_${sname}";
             my $pname = "${hname}_fprint";
             my $c = make_print_settings($hname, $setting);
+            $need_iterator = 1;
             $out = <<EOF
 $c
 $out
         indent(out, depth);
         fprintf(out, "${sname} [%zu]:\\n", $name->${sname}_len);
-        for (int i = 0; i < $name->${sname}_len; i++) {
+        for (i = 0; i < $name->${sname}_len; i++) {
             $pname(out, &$name->${sname}\[i\], depth+1);
         }
 EOF
@@ -1351,10 +1354,11 @@ EOF
 
         } elsif ($setting->{type} eq 'array') {
             my $fmt = scalar_type_print $setting->{element_type};
+            $need_iterator = 1;
             $out .= <<EOF
         indent(out, depth);
         fprintf(out, "${sname} [%zu]:\\n", $name->${sname}_len);
-        for (int i = 0; i < $name->${sname}_len; i++) {
+        for (i = 0; i < $name->${sname}_len; i++) {
             indent(out, depth+1);
             fprintf(out, "%d:\\t$fmt\\n", i, $name->${sname}\[i\]);
         }
@@ -1377,6 +1381,12 @@ EOF
         fprintf(out, "\\n");
 EOF
         }
+    }
+
+    if ($need_iterator) {
+        $out =~ s/ITERATOR_PLACEHOLDER/int i;/;
+    } else {
+        $out =~ s/ITERATOR_PLACEHOLDER//;
     }
 
     $out .= "}\n";
