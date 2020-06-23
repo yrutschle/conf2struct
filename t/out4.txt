@@ -1,4 +1,3 @@
 perl  ../../conf2struct in4.sch
 Unknown type `integer'
-Makefile:10: recipe for target 'c2s.c' failed
-make: *** [c2s.c] Error 25
+make: *** [Makefile:10: c2s.c] Error 25
