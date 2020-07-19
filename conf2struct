@@ -178,7 +178,9 @@ typedef union {
 } any_val;
 
 /* Copy an any_val to arbitrary memory location */
-static void any_valcpy(config_type type, void* target, any_val val)
+/* 0: success
+ * <0: error */
+static int any_valcpy(config_type type, void* target, any_val val)
 {
     switch(type) {
     case CFG_BOOL:
@@ -203,14 +205,17 @@ static void any_valcpy(config_type type, void* target, any_val val)
 
     default:
         fprintf(stderr, "Unknown type specification %d\n", type);
-        exit(1);
+        return -1;
     }
+    return 1;
 }
 
 
 /* Copy the value of a setting to an arbitrary memory that
 * must be large enough */
-static void settingcpy(config_type type, void* target, const config_setting_t* setting)
+/* 0: success
+ * <0: error */
+static int settingcpy(config_type type, void* target, const config_setting_t* setting)
 {
     any_val val;
     char* str;
@@ -244,13 +249,16 @@ static void settingcpy(config_type type, void* target, const config_setting_t* s
 
     default:
         fprintf(stderr, "Unknown type specification %d\n", type);
-        exit(1);
+        return -1;
     }
+    return 0;
 }
 
 /* Copy the value of a command line arg to arbitrary memory
 * that must be large enough for the type */
-static void clcpy(config_type type, void* target, const void* cl_arg)
+/* 0: success
+ * <0: error */
+static int clcpy(config_type type, void* target, const void* cl_arg)
 {
     any_val val;
     char* str;
@@ -284,14 +292,17 @@ static void clcpy(config_type type, void* target, const void* cl_arg)
 
     default:
         fprintf(stderr, "Unknown type specification %d\n", type);
-        exit(1);
+        return -1;
     }
+    return 0;
 }
 
 /* Copy the value of a string argument to arbitary memory
 * location that must be large enough, converting on the way
 * (i.e. CFG_INT gets atoi() and so on) */
-static void stringcpy(config_type type, void* target, char* from)
+/* 0: success
+ * <0: error */
+static int stringcpy(config_type type, void* target, char* from)
 {
     any_val val;
     
@@ -323,8 +334,9 @@ static void stringcpy(config_type type, void* target, char* from)
 
     default:
         fprintf(stderr, "Unknown type specification %d\n", type);
-        exit(1);
+        return -1;
     }
+    return 0;
 }
 
 
@@ -864,6 +876,8 @@ static int c2s_parse_file(const char* filename, config_t* c, char**errmsg)
     return 1;
 }
 
+/* 0: success
+   <0: error */
 int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
 {
     int nerrors, res;
@@ -880,7 +894,7 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
         arg_print_errors(stdout, ##name_end, "##name"); 
         arg_print_syntax(stdout, argtable, "\n");
         arg_print_glossary(stdout, argtable, "  %-25s\t%s\n");
-        return 0;
+        return -1;
     }
 
 
@@ -888,7 +902,7 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
     if (##name_conffile->count) {
         if (!c2s_parse_file(##name_conffile->filename[0], &c, &errmsg)) {
             fprintf(stderr, "%s\n", errmsg);
-            exit(1);
+            return -1;
         }
     }
 
@@ -897,16 +911,16 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
     res = read_block(s, cfg, table_##name, &errmsg);
     if (!res) {
         fprintf(stderr, "%s\n", errmsg);
-        return res;
+        return -1;
     }
 
     res = read_compounds(s, cfg, compound_cl_args, &errmsg);
     if (!res) {
         fprintf(stderr, "%s\n", errmsg);
-        return res;
+        return -1;
     }
 
-    return res;
+    return 0;
 }
 
 EOF

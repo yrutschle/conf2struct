@@ -1,0 +1,6 @@
+
+2020-07-19
+	Changed *_cl_parse() API: now always returns, 0 on success and
+	negative on error (before, it would exit() directly, which
+	prevents the caller from picking a different parsing strategy,
+	or choosing its exit codes)

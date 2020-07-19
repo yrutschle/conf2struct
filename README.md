@@ -221,7 +221,8 @@ to the final project.
 
 Error handling is performed directly by the parser, using
 standard conventions: printing an error description and
-synopsis in case of failure.
+synopsis in case of failure, and returning with a negative
+value. Returning 0 means it all went well.
 
 
 Command line option names is derived from the levels

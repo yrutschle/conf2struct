@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
     int res;
 
     res = eg_cl_parse(argc, argv, &config_cl);
-    if (!res) {
+    if (res) {
         exit(1);
     }
     eg_fprint(stdout, &config_cl,0);
