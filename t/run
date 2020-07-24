@@ -129,7 +129,16 @@ my @tests = (
         parser => 'parser.c',
         cmd => '--myint 42 --list-edit 1,23,"hello world" --list-edit 0,24,"good bye world"',
         out => 'out2h.txt',
-        desc => "No config file, add to list",
+        desc => "No config file with libconfig, add to list",
+    },
+    {
+        schema => 'in3.sch',
+        data => 'in2d.data',
+        parser => 'parser.c',
+        cmd => '--myint 42 --list-edit 1,23,"hello world" --list-edit 0,24,"good bye world"',
+        out => 'out2h.txt',
+        desc => "No config file without libconfig, add to list",
+        nolibconfig => 1,
     },
     {
         schema => 'in3.sch',
@@ -222,14 +231,18 @@ foreach my $test (@tests) {
     # $res_run, and only test the output of the Perl code
     # ($res_diff)
     my $rbp = $test->{rb_perl};
+    my $nolibconfig = $test->{nolibconfig} // "";
 
     my $opts = "";
     $opts .= '-MDevel::Cover="-silent,on,-db,../cover_db"' if $coverage;
 
+
     # $res variables are 0 on success, 1 on failure
     my ($res_make, $res_run, $res_diff);
-    my $make = "SCHEMA=$test->{schema} PARSER=$test->{parser} PERLOPTS=$opts make";
+    my $make = "SCHEMA=$test->{schema} PARSER=$test->{parser} ".
+               " NOLIBCONFIG=$nolibconfig PERLOPTS=$opts make";
     $make .= " > $test->{out} 2>&1" if $rbp;
+    print $make;
     $res_make = system($make);
 
     my $cmd;

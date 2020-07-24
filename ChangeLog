@@ -1,3 +1,9 @@
+2020-07-23
+	Changed libconfig to be optionnal. Source needs to
+	be compiled with -DCONFIG and linked with -lconfig
+	if support is wanted. `conffile_option` is ignored
+	(and will be considered illegal command line) if
+	libconfig is disabled.
 
 2020-07-19
 	Changed *_cl_parse() API: now always returns, 0 on success and
