@@ -558,7 +558,7 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
             if (setting)
                 len = config_setting_length(setting);
         } 
-        block = malloc(desc->size * len);
+        block = calloc(len, desc->size);
 
         *(size_t*)(((char*)target) + desc->offset_len) = len;
         *(void**)(((char*)target) + desc->offset) = block;
@@ -566,7 +566,7 @@ static void read_block_init(void* target, config_setting_t* cfg, struct config_d
         break;
 
     case CFG_GROUP:
-        block = malloc(desc->size);
+        block = calloc(1, desc->size);
         *(void**)(((char*)target) + desc->offset) = block;
         TRACE_READ((" sizing for %zu elems ", len));
         break;
