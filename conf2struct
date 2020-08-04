@@ -961,7 +961,7 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
 
 
     config_init(&c);
-    if (##name_conffile->count) {
+    if (##name_conffile && ##name_conffile->count) {
         if (!c2s_parse_file(##name_conffile->filename[0], &c, &errmsg)) {
             fprintf(stderr, "%s\n", errmsg);
             return -1;
