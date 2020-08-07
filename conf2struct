@@ -938,6 +938,67 @@ static int c2s_parse_file(const char* filename, config_t* c, char**errmsg)
     return 1;
 }
 
+
+void cfg_pretty_print(config_setting_t* parent, const char* path)
+{
+    int i, len, type;
+    config_setting_t* child;
+    char* subpath;
+    const char* name;
+
+    len = config_setting_length(parent);
+    for (i = 0; i < len; i++) {
+        child = config_setting_get_elem(parent, i);
+        name = config_setting_name(child);
+        if (!name) name = "";
+        type = config_setting_type(child);
+
+        if(config_setting_is_list(parent) ||
+            config_setting_is_array(parent)) {
+            asprintf(&subpath, "%s[%d]%s/", path, config_setting_index(child), name);
+        } else {
+            asprintf(&subpath, "%s%s/", path, name);
+        }
+
+        if (config_setting_is_scalar(child))
+            printf("%s: ", subpath);
+
+        switch(type) {
+        case CONFIG_TYPE_INT:
+            printf("%d\n", config_setting_get_int(child));
+            break;
+
+        case CONFIG_TYPE_BOOL:
+            printf("%s\n", config_setting_get_bool(child) ?  "[true]" : "[false]" );
+            break;
+
+        case CONFIG_TYPE_INT64:
+            printf("%lld\n", config_setting_get_int64(child));
+            break;
+
+        case CONFIG_TYPE_FLOAT:
+            printf("%lf\n", config_setting_get_float(child));
+            break;
+
+        case CONFIG_TYPE_STRING:
+            printf("%s\n", config_setting_get_string(child));
+            break;
+
+
+        case CONFIG_TYPE_ARRAY:
+        case CONFIG_TYPE_LIST:
+        case CONFIG_TYPE_GROUP:
+            cfg_pretty_print(child, subpath);
+            break;
+
+        default:
+            fprintf(stderr, "Unexpected type %d\n", config_setting_type(child));
+            exit(1);
+        }
+        free(subpath);
+    }
+}
+
 /* 0: success
    <0: error */
 int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
