@@ -542,6 +542,13 @@ int lookup_typed_ud(config_setting_t* cfg, void* target, struct config_desc *des
     return lookup_fn(cfg, name, ((char*)target) + desc->offset);
 }
 
+int setting_delete(config_setting_t* cfg, struct config_desc *desc)
+{
+    char name[strlen(desc->name)+1];;
+    strcpy(name, desc->name);
+    return config_setting_remove(cfg, name); /* discard after use */
+}
+
 /* When traversing configuration, allocate memory for plural
 * types, init for scalars */
 static void read_block_init(void* target, config_setting_t* cfg, struct config_desc* desc)
@@ -647,6 +654,7 @@ static int read_block_setval(void* target,
                 return 0;
             }
             print_setting(desc->type, (((char*)target) + desc->offset));
+            setting_delete(cfg, desc);
             in_cfg = 1;
         } else {
             TRACE_READ((" not in config file"));
@@ -1042,6 +1050,9 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
         fprintf(stderr, "%s\n", errmsg);
         return -1;
     }
+
+    printf("leftovers:\n");
+    cfg_pretty_print(s, "/");
 
     return 0;
 }
