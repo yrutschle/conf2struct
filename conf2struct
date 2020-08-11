@@ -132,6 +132,18 @@ header => <<'EOF',
 /* This gets included in the output .c file */
 
 
+/* Libconfig 1.4.9 is still used by major distributions
+ * (e.g. CentOS7) and had a different name for
+ * config_setting_lookup */
+#if LIBCONFIG_VER_MAJOR == 1
+#if LIBCONFIG_VER_MINOR == 4
+#if LIBCONFIG_VER_REVISION == 9
+#define config_setting_lookup config_lookup_from
+#endif
+#endif
+#endif
+
+
 /* config_type, lookup_fns, type2str are related, keep them together */
 typedef enum {
     CFG_BOOL,
