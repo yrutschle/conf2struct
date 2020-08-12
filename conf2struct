@@ -502,7 +502,7 @@ static void print_setting(config_type type, void* val)
 
 /* Changes all dashes to underscores in a string of
 * vice-versa */
-void strswap_ud(const char target, char* str)
+static void strswap_ud(const char target, char* str)
 {
     char* c;
     for (c = str; *c; c++)
@@ -512,7 +512,7 @@ void strswap_ud(const char target, char* str)
 
 /* Same as config_setting_lookup() but looks up with dash or
 * underscore so `my_setting` and `my-setting` match the same */
-config_setting_t* config_setting_lookup_ud(config_setting_t* cfg, struct config_desc* desc)
+static config_setting_t* config_setting_lookup_ud(config_setting_t* cfg, struct config_desc* desc)
 {
     config_setting_t* setting;
     char name[strlen(desc->name)+1];;
@@ -528,7 +528,7 @@ config_setting_t* config_setting_lookup_ud(config_setting_t* cfg, struct config_
     return setting;
 }
 
-int lookup_typed_ud(config_setting_t* cfg, void* target, struct config_desc *desc)
+static int lookup_typed_ud(config_setting_t* cfg, void* target, struct config_desc *desc)
 {
     lookup_fn lookup_fn = lookup_fns[desc->type];
     char name[strlen(desc->name)+1];;
@@ -542,7 +542,7 @@ int lookup_typed_ud(config_setting_t* cfg, void* target, struct config_desc *des
     return lookup_fn(cfg, name, ((char*)target) + desc->offset);
 }
 
-int setting_delete(config_setting_t* cfg, struct config_desc *desc)
+static int setting_delete(config_setting_t* cfg, struct config_desc *desc)
 {
     char name[strlen(desc->name)+1];;
     strcpy(name, desc->name);
