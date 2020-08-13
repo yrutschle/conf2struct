@@ -243,13 +243,30 @@ char* config_error_text(config_t* c) {
 }
 #endif
 
+/* This is the same as config_setting_lookup_string() except
+it allocates a new string which belongs to the caller */
+static int myconfig_setting_lookup_stringcpy(
+        const config_setting_t* setting, 
+        const char* name, 
+        char** value)
+{
+    const char* str;
+    *value = NULL;
+    if (config_setting_lookup_string(setting, name, &str) == CONFIG_TRUE) {
+        asprintf(value, "%s", str);
+        return CONFIG_TRUE;
+    } else {
+        return CONFIG_FALSE;
+    }
+}
+
 typedef int (*lookup_fn)(const config_setting_t*, const char*, void*);
 lookup_fn lookup_fns[] = {
     (lookup_fn)config_setting_lookup_bool,
     (lookup_fn)config_setting_lookup_int,
     (lookup_fn)config_setting_lookup_int64,
     (lookup_fn)config_setting_lookup_float,
-    (lookup_fn)config_setting_lookup_string,
+    (lookup_fn)myconfig_setting_lookup_stringcpy,
     NULL,  /* CFG_GROUP */
     NULL,  /* CFG_ARRAY */
     NULL,  /* CFG_LIST */
@@ -1051,7 +1068,6 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
         return -1;
     }
 
-    printf("leftovers:\n");
     cfg_pretty_print(s, "/");
 
     return 0;
