@@ -650,6 +650,7 @@ static int read_block_setval(void* target,
                 TRACE_READ(("[%d] = ", i));
                 print_setting(desc->array_type, (char*)block + desc->size *i); TRACE_READ(("\n"));
             }
+            setting_delete(cfg, desc);
         }
         break;
 
