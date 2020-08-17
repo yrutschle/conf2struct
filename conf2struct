@@ -559,11 +559,20 @@ static int lookup_typed_ud(config_setting_t* cfg, void* target, struct config_de
     return lookup_fn(cfg, name, ((char*)target) + desc->offset);
 }
 
-static int setting_delete(config_setting_t* cfg, struct config_desc *desc)
+/* Removes a setting, trying both underscores and dashes as
+* name (so deleting 'my-setting' deletes both 'my_setting'
+* and 'my-setting') */
+static int setting_delete_ud(config_setting_t* cfg, struct config_desc *desc)
 {
     char name[strlen(desc->name)+1];;
     strcpy(name, desc->name);
-    return config_setting_remove(cfg, name); /* discard after use */
+
+    strswap_ud('_', name);
+    if (config_setting_remove(cfg, name) == CONFIG_TRUE)
+        return CONFIG_TRUE;
+
+    strswap_ud('-', name);
+    return config_setting_remove(cfg, name);
 }
 
 /* When traversing configuration, allocate memory for plural
@@ -650,7 +659,7 @@ static int read_block_setval(void* target,
                 TRACE_READ(("[%d] = ", i));
                 print_setting(desc->array_type, (char*)block + desc->size *i); TRACE_READ(("\n"));
             }
-            setting_delete(cfg, desc);
+            setting_delete_ud(cfg, desc);
         }
         break;
 
@@ -672,7 +681,7 @@ static int read_block_setval(void* target,
                 return 0;
             }
             print_setting(desc->type, (((char*)target) + desc->offset));
-            setting_delete(cfg, desc);
+            setting_delete_ud(cfg, desc);
             in_cfg = 1;
         } else {
             TRACE_READ((" not in config file"));
