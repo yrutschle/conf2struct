@@ -184,7 +184,11 @@ allocate memory for groups, lists and arrays as required.
 - `errmsg` is a text string that explains what went wrong if
   parsing failed (e.g. a mandatory option is missing).
 
-`config_parser()` returns 0 on failure, 1 on success.
+If there are unknown settings in the configuration file,
+they will be printed to `stdout`, but will not generate an
+error.
+
+`*_parse_file()` returns 0 on failure, 1 on success.
 
 Printer API
 -----------

@@ -124,6 +124,14 @@ my @tests = (
         desc => "Compound option for list, append with inited string",
     },
     {
+        schema => 'in2.sch',
+        data => 'in2e.data',
+        parser => 'parser.c',
+        cmd => '-F in2e.data',
+        out => 'out2j.txt',
+        desc => "Non-existant settings are warned about",
+    },
+    {
         schema => 'in3.sch',
         data => 'in2d.data',
         parser => 'parser.c',
