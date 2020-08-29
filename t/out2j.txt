@@ -1,0 +1,62 @@
+Unknown settings:
+/nonexistant:scalar not in schema!
+/group/gnonexistant:scalar in group also not in schema
+/nonexistantgroup/gmybool:[true]
+/nonexistantgroup/gmyint:32
+/nonexistantgroup/gmyint64:12
+/dgroup/dlvl2/dlvl3/gdnonexistant:scalar in deep group not in schema
+/dgroup/dlvl2/nonexistantgroup/thing1:foo
+/dgroup/dlvl2/nonexistantgroup/thing2:bar
+/list[1]/lnonexistant:non existant scalar in a list
+/non_existant_list[0]/thing1a:1
+/non_existant_list[0]/thing1b:2
+/non_existant_list[1]/thing2a:a
+/non_existant_list[1]/thing2b:b
+
+mybool: 1
+myint: 23
+myint64: 939881564
+myfloat: 2.718282
+mystring: global mandatory string
+mymbool: 1
+mymint: 42
+mymint64: 42
+mymfloat: 3.141590
+mymstring: hello world
+myobool: 1
+myoint: 54
+myoint64: 57
+myofloat: 2.230000
+myostring: good bye cruel world
+myvarstr: a variable string
+group:
+    gmybool: 1
+    gmyint: 32
+    gmyint64: 12
+    gmyfloat: 3.140000
+    gmystring: string in group
+dgroup:
+    dlvl2:
+        dlvl3:
+            gdmybool: 0
+            gdmyint: 322
+            gdmyint64: 123
+            gdmyfloat: 3.141000
+            gdmystring: string in deep group
+        list [0]:
+list [3]:
+    lmybool: 0
+    lmyint: 21322
+    lmyint64: 321123
+    lmyfloat: 3.141592
+    lmystring: first
+    lmybool: 0
+    lmyint: 12232
+    lmyint64: 231213
+    lmyfloat: 3.213141
+    lmystring: second
+    lmybool: 1
+    lmyint: 22213
+    lmyint64: 123321
+    lmyfloat: 0.141592
+    lmystring: third
