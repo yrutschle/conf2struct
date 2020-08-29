@@ -1022,9 +1022,9 @@ static int cfg_as_string(config_setting_t* parent, const char* path, char** strp
 
         if(config_setting_is_list(parent) ||
            config_setting_is_array(parent)) {
-            asprintf(&subpath, "%s[%d]%s/", path, config_setting_index(child), name);
+            asprintf(&subpath, "%s[%d]%s", path, config_setting_index(child), name);
         } else {
-            asprintf(&subpath, "%s%s/", path, name);
+            asprintf(&subpath, "%s/%s", path, name);
         }
 
         if (config_setting_is_scalar(child)) {
@@ -1037,7 +1037,7 @@ static int cfg_as_string(config_setting_t* parent, const char* path, char** strp
             }  else {
                 asprintf(&old, "%s", "");
             }
-            asprintf(strp, "%s%s%s", old, subpath, value);
+            asprintf(strp, "%s%s:%s", old, subpath, value);
             free(value);
             free(old);
 
@@ -1098,7 +1098,7 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
     }
 
     errmsg = NULL;
-    res = cfg_as_string(s, "/", &errmsg);
+    res = cfg_as_string(s, "", &errmsg);
     if (res)
         fprintf(stderr, "Unknown settings:\n%s\n", errmsg);
 
