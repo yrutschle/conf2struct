@@ -1,3 +1,8 @@
+2020-08-29
+	Warn about settings that are present in the
+	configuration file but not in the schema, i.e.
+	unknown settings.
+
 2020-07-23
 	Changed libconfig to be optionnal. Source needs to
 	be compiled with -DCONFIG and linked with -lconfig
