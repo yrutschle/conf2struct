@@ -1096,6 +1096,10 @@ int ##name_cl_parse(int argc, char* argv[], struct ##name_item* cfg)
     }
 
     s = config_lookup(&c, "/");
+    if (!s) {
+        fprintf(stderr, "Lookup of root config failed\n");
+        return -1;
+    }
 
     res = read_block(s, cfg, table_##name, &errmsg);
     if (!res) {
