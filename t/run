@@ -138,6 +138,7 @@ my @tests = (
         cmd => '--myint 42 --list-edit 1,23,"hello world" --list-edit 0,24,"good bye world"',
         out => 'out2h.txt',
         desc => "No config file with libconfig, add to list",
+        nolibconfig => 1,
     },
     {
         schema => 'in3.sch',
@@ -155,6 +156,7 @@ my @tests = (
         cmd => '-i 2302 -I 2032 -s "hello"',
         out => 'out2i.txt',
         desc => "No config file, short options",
+        nolibconfig => 1,
     },
     {
         schema => 'in4.sch',
