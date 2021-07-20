@@ -7,6 +7,11 @@ ifeq ($(strip $(NOLIBCONFIG)),)
     CFLAGS+=-DLIBCONFIG
 endif
 
+ifneq ($(strip $(LIBPCRE)),)
+    LDFLAGS+=-lpcreposix -lpcre2-8
+    CFLAGS+=-DLIBPCRE
+endif
+
 OBJ=c2s.o parser.o argtable3.o
 parser: c2s.c $(OBJ)
 	gcc -o parser $(OBJ) $(LDFLAGS) -lgcov

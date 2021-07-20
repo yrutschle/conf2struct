@@ -1503,7 +1503,7 @@ $banner
 #include "$header"
 #include "argtable3.h"
 #ifdef LIBPCRE
-#include <pcre2posix.h>
+#include <pcreposix.h>
 #else
 #include <regex.h>
 #endif

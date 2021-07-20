@@ -1,3 +1,3 @@
 perl  ../../conf2struct in4.sch
 Unknown type `integer'
-make: *** [Makefile:15: c2s.c] Error 25
+make: *** [Makefile:20: c2s.c] Error 25
