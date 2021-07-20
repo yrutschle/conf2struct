@@ -1,0 +1,4 @@
+# invert dashes compared to schema
+
+my-int1: 32
+my_int2: 42
