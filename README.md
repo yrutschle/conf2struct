@@ -136,8 +136,7 @@ This creates command-line options that set an entire group.
 Each item in the list is a group composed of:
 
 - `name`: command-line option name
-- `pattern`: POSIX Extended Regular Expression used to parse
-  the argument to the option
+- `pattern`: regular expression used to parse the argument to the option.
 - `description`: Textual description printed when parsing
   failed
 - `short`: optional, single-character equivalent
@@ -156,7 +155,9 @@ are specified as integers worth 0 or 1.
 element should be added to the list, or override an existing
 element.
 
-
+Regular expressions are POSIX Extended by default.
+Perl-Compatible (PCRE2) can be chosen by compiling with
+LIBPCRE=1 and linking against libpcre2-8.
 
 Generated API
 =============

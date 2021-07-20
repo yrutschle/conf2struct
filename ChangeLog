@@ -1,3 +1,6 @@
+2021-07-18
+	Port PCRE from PCRE3 to new PCRE2.
+
 2020-08-29
 	Warn about settings that are present in the
 	configuration file but not in the schema, i.e.

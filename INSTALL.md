@@ -18,3 +18,11 @@ headers are required. In Debian:
 ```
 apt install libconfig8-dev
 ```
+
+To use Perl Regular Expressions, compile with LIBPCRE
+defined and link against libpcre2-8. This implies installing
+the PCRE2 library. In Debian:
+
+```
+apt install libpcre2-dev
+```

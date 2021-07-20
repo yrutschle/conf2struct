@@ -91,7 +91,7 @@ config: {
 
 # Compound options.
 cl_groups: (
-    { name: "group1"; pattern: "(\d),(\d+),(.*)";
+    { name: "group1"; pattern: "([[:digit:]]),([[:digit:]]+),(.*)";
       argdesc: "<bool>,<int>,<str>";   # in deep group
       list: "dgroup.dlvl2.dlvl3";
       override: "gdmystring";
