@@ -8,7 +8,7 @@ ifeq ($(strip $(NOLIBCONFIG)),)
 endif
 
 ifneq ($(strip $(LIBPCRE)),)
-    LDFLAGS+=-lpcreposix -lpcre2-8
+    LDFLAGS+=-lpcre2-8
     CFLAGS+=-DLIBPCRE
 endif
 
