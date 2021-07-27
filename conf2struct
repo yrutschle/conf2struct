@@ -48,14 +48,23 @@ my $conf = Conf::Libconfig->new;
 my $filename = shift @ARGV;
 die "Usage:\n\tconf2struct <file.cfg>\n" unless defined $filename;
 $conf->read_file($filename) or die "$filename: $!\n";
-my $hr = $conf->fetch_hashref("/");
 
-my $header = $hr->{header};
-my $parser = $hr->{parser};
-my $printer = $hr->{printer} // 0;
+my $header = $conf->lookup_value("header");
+my $parser = $conf->lookup_value("parser");
+my $printer = $conf->lookup_value("printer") // 0;
 
 die "$filename: Setting for header filename is not defined\n" unless defined $header;
 die "$filename: Setting for parser filename is not defined\n" unless defined $parser;
+
+my $hr = {
+    header              => $header,
+    parser              => $parser,
+    printer             => $printer,
+    conffile_option     => $conf->fetch_array("conffile_option"),
+    includes            => $conf->lookup_value("includes"),
+    config              => $conf->fetch_hashref("config"),
+    cl_groups           => $conf->fetch_array("cl_groups"),
+};
 
 # a bit of vocabulary:
 # Schema: libconfig input file to the perl script which

@@ -1,3 +1,6 @@
+2021-07-27
+	Support for libconfig 1.7.3
+
 2021-07-22
 	Port PCRE from PCRE3 to new PCRE2. PCRE2 Posix API
 	seems to have become a mess in Debian 10 so moved to
