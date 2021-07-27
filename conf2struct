@@ -52,8 +52,10 @@ my $hr = $conf->fetch_hashref("/");
 
 my $header = $hr->{header};
 my $parser = $hr->{parser};
-my $printer = $hr->{printer};
+my $printer = $hr->{printer} // 0;
 
+die "$filename: Setting for header filename is not defined\n" unless defined $header;
+die "$filename: Setting for parser filename is not defined\n" unless defined $parser;
 
 # a bit of vocabulary:
 # Schema: libconfig input file to the perl script which
