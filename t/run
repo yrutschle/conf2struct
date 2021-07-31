@@ -233,6 +233,15 @@ my @tests = (
         out => 'out5a2.txt',
         desc => "Command-line with dash sets underscore field",
     },
+    {
+        schema => 'in5.sch',
+        data => 'in5a.data',
+        parser => 'parser.c',
+        # You know something's wrong when you're doing code injection on yourself
+        cmd => '-F in5a.data ; grep include c2s.h',
+        out => 'out5a3.txt',
+        desc => "Verify header contains includes",
+    },
 );
 
 # Number tests
