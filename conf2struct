@@ -61,7 +61,7 @@ my $hr = {
     parser              => $parser,
     printer             => $printer,
     conffile_option     => $conf->fetch_array("conffile_option"),
-    includes            => $conf->lookup_value("includes"),
+    includes            => $conf->fetch_array("includes"),
     config              => $conf->fetch_hashref("config"),
     cl_groups           => $conf->fetch_array("cl_groups"),
 };
