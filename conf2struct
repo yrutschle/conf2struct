@@ -2,7 +2,7 @@
 
 my $license = <<EOF;
 # conf2struct: generate libconf parsers that read to structs
-# Copyright (C) 2018-2019  Yves Rutschle
+# Copyright (C) 2018-2021  Yves Rutschle
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
