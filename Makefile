@@ -1,18 +1,17 @@
 prefix=/usr/local
 bindir=$(prefix)/bin
 
-all: example checker
-
 CFLAGS=-g
 
-checker: confcheck.o
+all: example confcheck
+
+confcheck: confcheck.o
 	$(CC) $(CFLAGS) -o confcheck confcheck.o -lconfig
 
-
-install:
+install: conf2struct confcheck
 	mkdir -p $(DESTDIR)/$(bindir)
-	install -c conf2struct $(DESTDIR)$(bindir)/conf2struct
-	install -c confcheck $(DESTDIR)$(bindir)/confcheck
+	install -c -m 755 conf2struct $(DESTDIR)$(bindir)/conf2struct
+	install -c -m 755 confcheck $(DESTDIR)$(bindir)/confcheck
 
 uninstall:
 	rm -rf $(DESTDIR)$(bindir)/conf2struct $(DESTDIR)$(bindir)/confcheck
