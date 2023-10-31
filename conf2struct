@@ -29,7 +29,7 @@ EOF
 
 use strict;
 
-use Conf::Libconfig;
+use Conf::Libconfig 1.0.3;
 use Getopt::Long;
 
 use Data::Dumper;
@@ -60,11 +60,14 @@ my $hr = {
     header              => $header,
     parser              => $parser,
     printer             => $printer,
-    conffile_option     => $conf->fetch_array("conffile_option"),
-    includes            => $conf->fetch_array("includes"),
+    conffile_option     => $conf->value("conffile_option"),
+    includes            => $conf->value("includes"),
     config              => $conf->fetch_hashref("config"),
-    cl_groups           => $conf->fetch_array("cl_groups"),
+    cl_groups           => $conf->value("cl_groups"),
 };
+
+$hr->{includes} = [] unless $hr->{includes};
+$hr->{cl_groups} = [] unless $hr->{cl_groups};
 
 # a bit of vocabulary:
 # Schema: libconfig input file to the perl script which
