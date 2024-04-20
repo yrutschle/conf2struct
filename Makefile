@@ -1,7 +1,7 @@
 prefix=/usr/local
 bindir=$(prefix)/bin
 
-CFLAGS=-g
+CFLAGS=-g -DLIBCONFIG
 
 all: example confcheck
 
