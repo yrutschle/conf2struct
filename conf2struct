@@ -309,6 +309,16 @@ char* config_error_text(config_t* c) {
 }
 #endif
 
+static int c2s_asprintf(char **restrict strp, const char *restrict fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap,fmt);
+    int res = vasprintf(strp, fmt, ap);
+    va_end(ap);
+    return res;
+}
+
 /* This is the same as config_setting_lookup_string() except
 it allocates a new string which belongs to the caller */
 static int myconfig_setting_lookup_stringcpy(
@@ -319,7 +329,7 @@ static int myconfig_setting_lookup_stringcpy(
     const char* str;
     *value = NULL;
     if (config_setting_lookup_string(setting, name, &str) == CONFIG_TRUE) {
-        asprintf(value, "%s", str);
+        c2s_asprintf(value, "%s", str);
         return CONFIG_TRUE;
     } else {
         return CONFIG_FALSE;
@@ -403,7 +413,7 @@ static int settingcpy(config_type type, void* target, const config_setting_t* se
         break;
 
     case CFG_STRING:
-        asprintf(&str, "%s", config_setting_get_string(setting));
+        c2s_asprintf(&str, "%s", config_setting_get_string(setting));
         val.def_string = str;
         *(char**)target = val.def_string;
         break;
@@ -446,7 +456,7 @@ static int clcpy(config_type type, void* target, const void* cl_arg)
         break;
 
     case CFG_STRING:
-        asprintf(&str, "%s", (*(struct arg_str**)cl_arg)->sval[0]);
+        c2s_asprintf(&str, "%s", (*(struct arg_str**)cl_arg)->sval[0]);
         val.def_string = str;
         *(char**)target = val.def_string;
         break;
@@ -742,7 +752,7 @@ static int read_block_setval(void* target,
             /* setting is present in cfg, look it up */
             if (lookup_typed_ud(cfg, target, desc) != CONFIG_TRUE) {
                 TRACE_READ((" but wrong type (expected %s) ", type2str[desc->type]));
-                asprintf(errmsg, "Option \"%s\" wrong type, expected %s\n", 
+                c2s_asprintf(errmsg, "Option \"%s\" wrong type, expected %s\n", 
                     desc->name, type2str[desc->type]);
                 return 0;
             }
@@ -799,7 +809,7 @@ static int read_block(config_setting_t* cfg, void* target, struct config_desc* d
         set = read_block_setval(target, cfg, desc, errmsg);
 
         if (!set && desc->mandatory) {
-            asprintf(errmsg, "Mandatory option \"%s\" not found", desc->name);
+            c2s_asprintf(errmsg, "Mandatory option \"%s\" not found", desc->name);
             return 0;
         }
 
@@ -957,13 +967,13 @@ static int regcompmatch_posix( regmatch_t* pmatch,
         int errlen = regerror(res, &preg, NULL, 0);
         regerr = malloc(errlen);
         regerror(res, &preg, regerr, errlen);
-        asprintf(errmsg, "compiling pattern /%s/:%s", arg->regex, regerr);
+        c2s_asprintf(errmsg, "compiling pattern /%s/:%s", arg->regex, regerr);
         free(regerr);
         return 0;
     }
     res = regexec(&preg, arg_cl->sval[arg_index], MAX_MATCH, &pmatch[0], 0);
     if (res) {
-        asprintf(errmsg, "--%s %s: Illegal argument", 
+        c2s_asprintf(errmsg, "--%s %s: Illegal argument", 
         arg_cl->hdr.longopts, 
         arg->regex); 
         return 0;
@@ -989,7 +999,7 @@ static int regcompmatch_pcre2( regmatch_t* pmatch,
     pcre = pcre2_compile((PCRE2_SPTR8)arg->regex, PCRE2_ZERO_TERMINATED, 0, &error, &error_offset, NULL);
     if (!pcre) {
         pcre2_get_error_message(error, err_str, sizeof(err_str));
-        asprintf(errmsg, "compiling pattern /%s/:%d: %s at offset %ld\n",
+        c2s_asprintf(errmsg, "compiling pattern /%s/:%d: %s at offset %ld\n",
                 arg->regex, error, err_str, error_offset);
         return 0;
     }
@@ -999,7 +1009,7 @@ static int regcompmatch_pcre2( regmatch_t* pmatch,
                           0, 0, matches, NULL);
     if (res < 0) {
         pcre2_get_error_message(res, err_str, sizeof(err_str));
-        asprintf(errmsg, "matching %s =~ /%s/:%d: %s\n", 
+        c2s_asprintf(errmsg, "matching %s =~ /%s/:%d: %s\n", 
                           arg_cl->sval[arg_index], arg->regex, res, err_str);
         return 0;
     }
@@ -1088,13 +1098,13 @@ static int c2s_parse_file(const char* filename, config_t* c, char**errmsg)
     /* Read config file */
     if (config_read_file(c, filename) == CONFIG_FALSE) {
         if (config_error_line(c) != 0) {
-           asprintf(errmsg, "%s:%d:%s", 
+           c2s_asprintf(errmsg, "%s:%d:%s", 
                     filename,
                     config_error_line(c),
                     config_error_text(c));
            return 0;
         }
-        asprintf(errmsg, "%s:%s", filename, config_error_text(c));
+        c2s_asprintf(errmsg, "%s:%s", filename, config_error_text(c));
         return 0;
     }
     return 1;
@@ -1105,23 +1115,23 @@ static void scalar_to_string(char** strp, config_setting_t* s)
 {
     switch(config_setting_type(s)) {
     case CONFIG_TYPE_INT:
-        asprintf(strp, "%d\n", config_setting_get_int(s));
+        c2s_asprintf(strp, "%d\n", config_setting_get_int(s));
         break;
 
     case CONFIG_TYPE_BOOL:
-        asprintf(strp, "%s\n", config_setting_get_bool(s) ?  "[true]" : "[false]" );
+        c2s_asprintf(strp, "%s\n", config_setting_get_bool(s) ?  "[true]" : "[false]" );
         break;
 
     case CONFIG_TYPE_INT64:
-        asprintf(strp, "%lld\n", config_setting_get_int64(s));
+        c2s_asprintf(strp, "%lld\n", config_setting_get_int64(s));
         break;
 
     case CONFIG_TYPE_FLOAT:
-        asprintf(strp, "%lf\n", config_setting_get_float(s));
+        c2s_asprintf(strp, "%lf\n", config_setting_get_float(s));
         break;
 
     case CONFIG_TYPE_STRING:
-        asprintf(strp, "%s\n", config_setting_get_string(s));
+        c2s_asprintf(strp, "%s\n", config_setting_get_string(s));
         break;
 
     default: /* This means a bug */
@@ -1149,9 +1159,9 @@ static int cfg_as_string(config_setting_t* parent, const char* path, char** strp
 
         if(config_setting_is_list(parent) ||
            config_setting_is_array(parent)) {
-            asprintf(&subpath, "%s[%d]%s", path, config_setting_index(child), name);
+            c2s_asprintf(&subpath, "%s[%d]%s", path, config_setting_index(child), name);
         } else {
-            asprintf(&subpath, "%s/%s", path, name);
+            c2s_asprintf(&subpath, "%s/%s", path, name);
         }
 
         if (config_setting_is_scalar(child)) {
@@ -1159,12 +1169,12 @@ static int cfg_as_string(config_setting_t* parent, const char* path, char** strp
 
             /* Add value to the output string  */
             if (*strp) {
-                asprintf(&old, "%s", *strp);
+                c2s_asprintf(&old, "%s", *strp);
                 free(*strp);
             }  else {
-                asprintf(&old, "%s", "");
+                c2s_asprintf(&old, "%s", "");
             }
-            asprintf(strp, "%s%s:%s", old, subpath, value);
+            c2s_asprintf(strp, "%s%s:%s", old, subpath, value);
             free(value);
             free(old);
 
@@ -1575,6 +1585,7 @@ $banner
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "$header"
 #include "argtable3.h"
 #ifdef LIBPCRE
